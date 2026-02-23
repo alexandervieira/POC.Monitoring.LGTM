@@ -1,0 +1,59 @@
+steps:
+  # Testes
+  - name: 'mcr.microsoft.com/dotnet/nightly/sdk:10.0-preview'
+    id: 'test'
+    entrypoint: 'dotnet'
+    args: ['test', 'src/APIContagem.sln', '--configuration', 'Release', '--logger:trx']
+  
+  # Build da imagem
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build'
+    args: [
+      'build',
+      '-t', '${_REGION}-docker.pkg.dev/$PROJECT_ID/backend/apicontagem:$SHORT_SHA',
+      '-t', '${_REGION}-docker.pkg.dev/$PROJECT_ID/backend/apicontagem:latest',
+      '--cache-from', '${_REGION}-docker.pkg.dev/$PROJECT_ID/backend/apicontagem:latest',
+      '.'
+    ]
+  
+  # Push para Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push'
+    args: [
+      'push',
+      '${_REGION}-docker.pkg.dev/$PROJECT_ID/backend/apicontagem:$SHORT_SHA'
+    ]
+  
+  # Deploy no Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy'
+    entrypoint: 'gcloud'
+    args: [
+      'run', 'deploy', 'apicontagem-${_ENVIRONMENT}',
+      '--image', '${_REGION}-docker.pkg.dev/$PROJECT_ID/backend/apicontagem:$SHORT_SHA',
+      '--region', '${_REGION}',
+      '--platform', 'managed',
+      '--allow-unauthenticated',
+      '--memory', '256Mi',
+      '--cpu', '1',
+      '--concurrency', '80',
+      '--min-instances', '0',
+      '--max-instances', '10',
+      '--set-env-vars', 'OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy.monitoring.svc.cluster.local:4317',
+      '--vpc-connector', '${_VPC_CONNECTOR}',
+      '--set-secrets', 'DB_PASSWORD=db-password-${_ENVIRONMENT}:latest',
+      '--execution-environment', 'gen2'
+    ]
+
+substitutions:
+  _REGION: us-central1
+  _ENVIRONMENT: dev
+  _VPC_CONNECTOR: serverless-connector
+
+images:
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/backend/apicontagem:$SHORT_SHA'
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/backend/apicontagem:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: 'E2_HIGHCPU_8'

@@ -1,0 +1,14 @@
+apiVersion: 1
+
+providers:
+  - name: 'ASP.NET Core Dashboards'
+    orgId: 1
+    folder: 'ASP.NET Core'
+    folderUid: ''
+    type: file
+    disableDeletion: false
+    editable: true
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/aspnetcore

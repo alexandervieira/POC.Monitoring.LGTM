@@ -1,0 +1,147 @@
+// Configuração do Alloy para sanitização de dados sensíveis (LGPD)
+logging {
+  level = "info"
+}
+
+// Ativar debug ao vivo (útil para desenvolvimento)
+livedebugging {
+  enabled = true
+}
+
+// Recebimento de telemetria da API
+otelcol.receiver.otlp "default" {
+  grpc {
+    endpoint = "0.0.0.0:4317"
+  }
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+  
+  output {
+    metrics = [otelcol.processor.attributes.redact.input]
+    logs    = [otelcol.processor.attributes.redact.input]
+    traces  = [otelcol.processor.attributes.redact.input]
+  }
+}
+
+// Processador de sanitização LGPD
+otelcol.processor.attributes "redact" {
+  // Ações de redação para dados sensíveis
+  
+  // CPF (formato: 123.456.789-10 ou 12345678910)
+  action {
+    key     = "body"
+    action  = "update"
+    value   = "***CPF-REDACTED***"
+    pattern = "\\b[0-9]{3}\\.?[0-9]{3}\\.?[0-9]{3}-?[0-9]{2}\\b"
+  }
+  
+  // CNPJ (formato: 12.345.678/0001-90 ou 12345678000190)
+  action {
+    key     = "body"
+    action  = "update"
+    value   = "***CNPJ-REDACTED***"
+    pattern = "\\b[0-9]{2}\\.?[0-9]{3}\\.?[0-9]{3}\\/?[0-9]{4}-?[0-9]{2}\\b"
+  }
+  
+  // Email
+  action {
+    key     = "body"
+    action  = "update"
+    value   = "***EMAIL-REDACTED***"
+    pattern = "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Z|a-z]{2,}\\b"
+  }
+  
+  // Tokens e API Keys em parâmetros de URL
+  action {
+    key     = "body"
+    action  = "update"
+    value   = "***TOKEN-REDACTED***"
+    pattern = "(?i)(token|api[_-]?key|apikey|access_token|bearer)=[^&\\s]+"
+  }
+  
+  // Senhas em parâmetros de URL
+  action {
+    key     = "body"
+    action  = "update"
+    value   = "***PASSWORD-REDACTED***"
+    pattern = "(?i)(password|senha|passwd|pwd)=[^&\\s]+"
+  }
+  
+  // Telefone (formato: (11) 99999-9999 ou 11999999999)
+  action {
+    key     = "body"
+    action  = "update"
+    value   = "***PHONE-REDACTED***"
+    pattern = "\\b\\(?[0-9]{2}\\)?\\s?[0-9]{4,5}-?[0-9]{4}\\b"
+  }
+  
+  // Cartão de crédito (identificação básica)
+  action {
+    key     = "body"
+    action  = "update"
+    value   = "***CARD-REDACTED***"
+    pattern = "\\b[0-9]{4}[\\s-]?[0-9]{4}[\\s-]?[0-9]{4}[\\s-]?[0-9]{4}\\b"
+  }
+  
+  // Atributos HTTP que podem conter dados sensíveis
+  action {
+    key     = "attributes"
+    action  = "update"
+    value   = "***REDACTED***"
+    pattern = "(?i).*(authorization|cookie|set-cookie|token|key|password|senha).*"
+  }
+  
+  // Sanitização de headers HTTP
+  action {
+    key     = "headers"
+    action  = "update"
+    value   = "***REDACTED***"
+    pattern = "(?i).*(authorization|cookie|token|key|password).*"
+  }
+  
+  output {
+    metrics = [otelcol.exporter.prometheus.default.input]
+    logs    = [otelcol.exporter.loki.logs.input]
+    traces  = [otelcol.exporter.otlphttp.traces.input]
+  }
+}
+
+// Exportador para Prometheus
+otelcol.exporter.prometheus "default" {
+  forward_to = [prometheus.remote_write.default.receiver]
+}
+
+// Remote Write para Prometheus
+prometheus.remote_write "default" {
+  endpoint {
+    url = "http://prometheus:9090/api/v1/write"
+  }
+}
+
+// Exportador para Loki (OTLP HTTP)
+otelcol.exporter.otlphttp "logs" {
+  client {
+    endpoint = "http://loki:3100/otlp"
+    timeout  = "5s"
+  }
+}
+
+// Exportador para Prometheus (OTLP HTTP)
+otelcol.exporter.otlphttp "metrics" {
+  client {
+    endpoint = "http://prometheus:9090/api/v1/otlp"
+    timeout  = "5s"
+  }
+}
+
+// Exportador para Tempo (OTLP HTTP)
+otelcol.exporter.otlphttp "traces" {
+  client {
+    endpoint = "http://tempo:4318"
+    timeout  = "5s"
+    tls {
+      insecure = true
+    }
+  }
+}

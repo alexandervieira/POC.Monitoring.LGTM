@@ -1,0 +1,680 @@
+global:
+  environment: stage
+  gcpProjectId: ${GCP_PROJECT_ID}  # Será substituído pelo script
+  storageBucket: ${PROJECT_ID}-stage-loki-logs
+  domain: stage.mydomain.com
+
+# Grafana - Configuração de staging
+grafana:
+  enabled: true
+  replicas: 2  # Alta disponibilidade em staging
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClassName: standard
+  
+  env:
+    GF_AUTH_ANONYMOUS_ENABLED: "true"
+    GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
+    GF_SECURITY_ALLOW_EMBEDDING: "true"
+    GF_SERVER_ROOT_URL: "https://grafana-stage.${DOMAIN}"
+    GF_LOG_LEVEL: "info"
+    GF_SMTP_ENABLED: "true"  # Alertas por email
+    GF_SMTP_HOST: "smtp.gmail.com:587"
+    GF_SMTP_USER: "${SMTP_USER}"
+    GF_SMTP_PASSWORD: "${SMTP_PASSWORD}"
+    GF_SMTP_FROM_ADDRESS: "alerts@stage.mydomain.com"
+    GF_SMTP_FROM_NAME: "Grafana Stage Alerts"
+  
+  grafana.ini:
+    auth:
+      disable_login_form: true
+    auth.anonymous:
+      enabled: true
+      org_role: Viewer
+    security:
+      allow_embedding: true
+    server:
+      root_url: https://grafana-stage.${DOMAIN}
+      serve_from_sub_path: true
+    log:
+      level: info
+      mode: console
+    alerting:
+      enabled: true
+      execute_alerts: true
+  
+  # Dashboards com versionamento
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: 'default'
+          orgId: 1
+          folder: ''
+          type: file
+          disableDeletion: false
+          editable: true
+          options:
+            path: /var/lib/grafana/dashboards/default
+  
+  dashboards:
+    default:
+      aspnet-core-metrics:
+        gnetId: 19924
+        revision: 1
+        datasource: Prometheus
+      aspnet-core-endpoint:
+        gnetId: 19925
+        revision: 1
+        datasource: Prometheus
+      kubernetes-cluster:
+        gnetId: 10000  # Kubernetes cluster monitoring
+        revision: 1
+        datasource: Prometheus
+  
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          type: prometheus
+          url: http://prometheus-server:80
+          access: proxy
+          isDefault: true
+          version: 1
+          editable: false
+        
+        - name: Loki
+          type: loki
+          url: http://loki:3100
+          access: proxy
+          version: 1
+          editable: false
+          jsonData:
+            maxLines: 1000
+            derivedFields:
+              - datasourceUid: tempo
+                matcherRegex: tid=(\w+)
+                name: TraceId
+                url: $${__value.raw}
+        
+        - name: Tempo
+          type: tempo
+          url: http://tempo:3200
+          access: proxy
+          version: 1
+          editable: false
+          jsonData:
+            tracesToLogsV2:
+              datasourceUid: loki
+              filterByTraceID: true
+              spanStartTimeShift: '-1h'
+              spanEndTimeShift: '1h'
+            serviceMap:
+              datasourceUid: prometheus
+            nodeGraph:
+              enabled: true
+            search:
+              hide: false
+
+# Loki - Configuração staging
+loki:
+  enabled: true
+  replicas: 2  # Mínimo 2 para HA
+  
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+  
+  storage:
+    type: gcs
+    gcs:
+      bucketName: ${PROJECT_ID}-stage-loki-logs
+      chunkBufferSize: 10485760  # 10MB
+      requestTimeout: 60s
+  
+  config:
+    auth_enabled: false
+    
+    server:
+      http_listen_port: 3100
+      grpc_listen_port: 9095
+      log_level: info
+      grpc_server_max_recv_msg_size: 104857600  # 100MB
+      grpc_server_max_send_msg_size: 104857600  # 100MB
+    
+    limits_config:
+      retention_period: 1440h  # 60 dias para staging
+      allow_structured_metadata: true
+      max_entries_limit_per_query: 10000
+      max_global_streams_per_user: 10000
+      ingestion_rate_mb: 20
+      ingestion_burst_size_mb: 40
+      max_query_series: 5000
+      max_query_length: 721h
+    
+    schema_config:
+      configs:
+        - from: "2024-01-01"
+          store: tsdb
+          object_store: gcs
+          schema: v13
+          index:
+            prefix: loki_index_
+            period: 24h
+    
+    storage_config:
+      tsdb_shipper:
+        active_index_directory: /var/loki/index
+        shared_store: gcs
+        cache_location: /var/loki/cache
+        cache_ttl: 24h
+        resync_interval: 5m
+      gcs:
+        bucket_name: ${PROJECT_ID}-stage-loki-logs
+        chunk_buffer_size: 10485760
+    
+    compactor:
+      working_directory: /var/loki/compactor
+      shared_store: gcs
+      retention_enabled: true
+      retention_delete_delay: 2h
+      delete_request_store: gcs
+      compaction_interval: 10m
+    
+    ingester:
+      lifecycler:
+        ring:
+          replication_factor: 2
+          kvstore:
+            store: memberlist
+      chunk_idle_period: 30m
+      chunk_retain_period: 1m
+      max_chunk_age: 1h
+      wal:
+        enabled: true
+        dir: /var/loki/wal
+        flush_on_shutdown: true
+      autoforget_unhealthy: true
+    
+    querier:
+      query_ingesters_within: 3h
+      max_concurrent: 8
+    
+    query_range:
+      parallelise_shardable_queries: true
+      cache_results: true
+      results_cache:
+        cache:
+          enable_fifocache: true
+          fifocache:
+            max_size_bytes: 500MB
+            validity: 2h
+    
+    frontend:
+      log_queries_longer_than: 5s
+      compress_responses: true
+      max_outstanding_per_tenant: 100
+    
+    memberlist:
+      join_members:
+        - loki-memberlist
+
+# Tempo - Configuração staging
+tempo:
+  enabled: true
+  replicas: 2
+  
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+  
+  storage:
+    trace:
+      backend: gcs
+      gcs:
+        bucket_name: ${PROJECT_ID}-stage-tempo-traces
+        prefix: traces
+        chunk_buffer_size: 20971520  # 20MB
+        endpoint: storage.googleapis.com
+        hedge_requests_at: 200ms
+        hedge_requests_up_to: 2
+        insecure: false
+    
+    wal:
+      path: /var/tempo/wal
+      encoding: snappy
+      bloom_filter_false_positive: 0.01
+      index_downsample: 10
+      ingester_age_range_multiplier: 2
+  
+  tempo:
+    retention: 1440h  # 60 dias
+    
+    server:
+      http_listen_port: 3200
+      grpc_listen_port: 9095
+      log_level: info
+    
+    distributor:
+      receivers:
+        otlp:
+          protocols:
+            grpc:
+              endpoint: 0.0.0.0:4317
+            http:
+              endpoint: 0.0.0.0:4318
+        jaeger:
+          protocols:
+            thrift_http:
+              endpoint: 0.0.0.0:14268
+            grpc:
+              endpoint: 0.0.0.0:14250
+            thrift_binary:
+              endpoint: 0.0.0.0:6832
+            thrift_compact:
+              endpoint: 0.0.0.0:6831
+        zipkin:
+          endpoint: 0.0.0.0:9411
+    
+    ingester:
+      max_block_duration: 30m
+      max_block_bytes: 2_000_000_000  # 2GB
+      lifecycler:
+        ring:
+          replication_factor: 2
+          kvstore:
+            store: memberlist
+    
+    compactor:
+      compaction:
+        block_retention: 1440h
+        compaction_window: 4h
+        max_block_bytes: 100_000_000_000
+        max_compaction_objects: 1000000
+        block_retention: 1440h
+    
+    metrics_generator:
+      enabled: true
+      processors:
+        - service-graphs
+        - span-metrics
+        - local-blocks
+      registry:
+        external_labels:
+          source: tempo
+          cluster: stage-gke
+          namespace: monitoring
+        collection_interval: 30s
+      storage:
+        path: /var/tempo/generator/wal
+        remote_write:
+          - url: http://prometheus-server:9090/api/v1/write
+            send_exemplars: true
+            max_retries: 5
+            queue_config:
+              capacity: 5000
+              max_samples_per_send: 1000
+    
+    querier:
+      max_concurrent_queries: 10
+      search:
+        max_duration: 24h
+        external_hedge_requests_at: 200ms
+        external_hedge_requests_up_to: 2
+    
+    query_frontend:
+      search:
+        duration_slo: 10s
+        throughput_bytes_slo: 2e9
+      trace_by_id:
+        duration_slo: 5s
+    
+    overrides:
+      defaults:
+        metrics_generator:
+          processors: [service-graphs, span-metrics, local-blocks]
+          generate_native_histograms: both
+        global:
+          max_bytes_per_trace: 10000000
+          max_search_bytes_per_trace: 10000
+        ingestion:
+          rate_limit_bytes_per_second: 20000000
+          burst_size_bytes: 40000000
+    
+    memberlist:
+      join_members:
+        - tempo-memberlist
+
+# Prometheus - Configuração staging
+prometheus:
+  enabled: true
+  
+  server:
+    replicas: 2
+    retention: 1440h  # 60 dias
+    
+    resources:
+      requests:
+        cpu: 200m
+        memory: 1Gi
+      limits:
+        cpu: 1000m
+        memory: 4Gi
+    
+    extraFlags:
+      - web.enable-otlp-receiver
+      - storage.tsdb.retention.time=60d
+      - storage.tsdb.retention.size=50GB
+      - storage.tsdb.min-block-duration=2h
+      - storage.tsdb.max-block-duration=2h
+      - storage.tsdb.wal-compression
+      - enable-feature=exemplar-storage
+      - enable-feature=otlp-write-receiver
+      - enable-feature=remote-write-receiver
+      - web.enable-lifecycle
+    
+    persistentVolume:
+      enabled: false  # Usa GCS via Thanos
+    
+    thanos:
+      create: true
+      version: v0.34.0
+      service:
+        type: ClusterIP
+        grpcPort: 10901
+        httpPort: 10902
+      objstoreConfig:
+        type: GCS
+        config:
+          bucket: ${PROJECT_ID}-stage-prometheus-metrics
+          prefix: prometheus
+      grpcSeriesMaxCallSize: 10485760  # 10MB
+    
+    extraScrapeConfigs: |
+      - job_name: 'apicontagem'
+        scrape_interval: 5s
+        scrape_timeout: 3s
+        metrics_path: /metrics
+        static_configs:
+          - targets: ['apicontagem-stage.default.svc.cluster.local:8080']
+            labels:
+              environment: stage
+              app: apicontagem
+              team: backend
+      
+      - job_name: 'alloy'
+        scrape_interval: 10s
+        scrape_timeout: 5s
+        static_configs:
+          - targets: ['alloy.monitoring.svc.cluster.local:12345']
+            labels:
+              environment: stage
+              app: alloy
+      
+      - job_name: 'kubernetes-pods'
+        kubernetes_sd_configs:
+          - role: pod
+        scrape_interval: 15s
+        scrape_timeout: 10s
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+            target_label: __address__
+          - action: labelmap
+            regex: __meta_kubernetes_pod_label_(.+)
+          - source_labels: [__meta_kubernetes_namespace]
+            action: replace
+            target_label: kubernetes_namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            action: replace
+            target_label: kubernetes_pod_name
+          - source_labels: [__meta_kubernetes_pod_phase]
+            regex: Failed|Succeeded
+            action: drop
+      
+      - job_name: 'kubernetes-nodes'
+        kubernetes_sd_configs:
+          - role: node
+        scrape_interval: 30s
+        scrape_timeout: 15s
+        scheme: https
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        relabel_configs:
+          - action: labelmap
+            regex: __meta_kubernetes_node_label_(.+)
+          - target_label: __address__
+            replacement: kubernetes.default.svc:443
+          - source_labels: [__meta_kubernetes_node_name]
+            regex: (.+)
+            target_label: __metrics_path__
+            replacement: /api/v1/nodes/$1/proxy/metrics
+    
+    service:
+      type: ClusterIP
+      annotations:
+        cloud.google.com/neg: '{"ingress": true}'
+  
+  alertmanager:
+    enabled: true
+    replicas: 2
+    config:
+      global:
+        slack_api_url: ${SLACK_WEBHOOK_STAGE}
+        pagerduty_url: https://events.pagerduty.com/v2/enqueue
+      route:
+        group_by: ['alertname', 'cluster', 'service']
+        group_wait: 30s
+        group_interval: 5m
+        repeat_interval: 12h
+        receiver: 'default-receiver'
+        routes:
+          - match:
+              severity: critical
+            receiver: pagerduty-critical
+            continue: true
+          - match:
+              severity: warning
+            receiver: slack-warning
+      receivers:
+        - name: 'default-receiver'
+          slack_configs:
+            - channel: '#alerts'
+              title: '[{{ .Status | toUpper }}] {{ .GroupLabels.alertname }}'
+              text: '{{ .CommonAnnotations.description }}'
+        - name: 'pagerduty-critical'
+          pagerduty_configs:
+            - severity: critical
+              description: '{{ .GroupLabels.alertname }} - {{ .CommonAnnotations.description }}'
+              client: Prometheus Alertmanager
+        - name: 'slack-warning'
+          slack_configs:
+            - channel: '#alerts-warning'
+              title: '[WARNING] {{ .GroupLabels.alertname }}'
+              text: '{{ .CommonAnnotations.description }}'
+    
+    service:
+      type: ClusterIP
+  
+  nodeExporter:
+    enabled: true
+    resources:
+      requests:
+        cpu: 50m
+        memory: 50Mi
+      limits:
+        cpu: 200m
+        memory: 200Mi
+  
+  kubeStateMetrics:
+    enabled: true
+  
+  pushgateway:
+    enabled: false
+
+# Alloy - Configuração com sanitização ativa
+alloy:
+  enabled: true
+  image:
+    repository: grafana/alloy
+    tag: v1.7.5
+  
+  replicas: 2
+  
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  
+  configMap:
+    name: alloy-config
+    mountPath: /etc/alloy
+  
+  ports:
+    - name: http
+      containerPort: 12345
+      protocol: TCP
+    - name: otlp-grpc
+      containerPort: 4317
+      protocol: TCP
+    - name: otlp-http
+      containerPort: 4318
+      protocol: TCP
+  
+  service:
+    type: ClusterIP
+    ports:
+      - name: http
+        port: 12345
+        targetPort: 12345
+      - name: otlp-grpc
+        port: 4317
+        targetPort: 4317
+      - name: otlp-http
+        port: 4318
+        targetPort: 4318
+  
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "12345"
+    prometheus.io/path: "/metrics"
+
+# Memcached - Cache para Tempo
+memcached:
+  enabled: true
+  image:
+    repository: memcached
+    tag: 1.6.29-alpine
+  
+  replicas: 2
+  
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  
+  memcached:
+    maxItemMemory: 128
+    verbosity: v
+    extraArgs:
+      - -I 10m
+      - -c 2048
+      - -t 4
+      - -B auto
+  
+  service:
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "11211"
+
+# ServiceMonitor para integração com Prometheus Operator
+serviceMonitors:
+  enabled: true
+  
+  alloy:
+    enabled: true
+    endpoints:
+      - port: http
+        path: /metrics
+        interval: 15s
+  
+  loki:
+    enabled: true
+    endpoints:
+      - port: http-metrics
+        interval: 30s
+  
+  tempo:
+    enabled: true
+    endpoints:
+      - port: http
+        interval: 30s
+      - port: grpc
+        interval: 30s
+  
+  prometheus:
+    enabled: false  # Prometheus se auto-monitora
+
+# Ingress configuration
+ingress:
+  enabled: true
+  annotations:
+    kubernetes.io/ingress.class: "gce"
+    kubernetes.io/ingress.allow-http: "false"
+    networking.gke.io/managed-certificates: "grafana-stage-cert"
+    networking.gke.io/v1beta1.FrontendConfig: "grafana-stage-frontend"
+  
+  hosts:
+    - host: grafana-stage.${DOMAIN}
+      paths:
+        - path: /*
+          backend:
+            serviceName: grafana
+            servicePort: 80
+  
+  tls:
+    - secretName: grafana-stage-tls
+      hosts:
+        - grafana-stage.${DOMAIN}
+
+# ManagedCertificate para GKE
+managedCertificate:
+  enabled: true
+  name: grafana-stage-cert
+  domains:
+    - grafana-stage.${DOMAIN}
+
+# FrontendConfig para SSL policies
+frontendConfig:
+  enabled: true
+  name: grafana-stage-frontend
+  sslPolicy: modern-ssl-policy
+  redirectToHttps:
+    enabled: true
+    responseCodeName: MOVED_PERMANENTLY_DEFAULT

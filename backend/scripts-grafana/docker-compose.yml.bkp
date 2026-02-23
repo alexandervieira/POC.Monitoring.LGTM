@@ -1,0 +1,141 @@
+# Exemplo que utilizei como base para este Docker Compose:
+# https://github.com/grafana/adventure/blob/main/docker-compose.yml
+services:
+  alloy:
+    image: grafana/alloy:v1.7.5
+    ports:
+      - 12345:12345
+      - 4318:4318
+      - 4317:4317
+    volumes:
+      - ./config.alloy:/etc/alloy/config.alloy
+    command: run --server.http.listen-addr=0.0.0.0:12345 --storage.path=/var/lib/alloy/data /etc/alloy/config.alloy
+    depends_on:
+      - loki
+
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    ports:
+      - 9090:9090
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    command: --config.file=/etc/prometheus/prometheus.yml --web.enable-otlp-receiver --enable-feature=exemplar-storage
+
+  loki:
+    image: grafana/loki:3.4.2
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki-config.yaml:/etc/loki/local-config.yaml
+    command: -config.file=/etc/loki/local-config.yaml
+
+  grafana:
+    image: grafana/grafana:11.5.2
+    container_name: grafana
+    environment:
+      # Autenticação
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_BASIC_ENABLED=false
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+      
+      # Segurança e embedding
+      - GF_SERVER_ALLOW_EMBEDDING=true
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      
+      # CORS
+      - GF_SERVER_CORS_ALLOW_CREDENTIALS=true
+      - GF_SERVER_CORS_ALLOW_ORIGINS=http://localhost:4000,http://localhost:3000,http://localhost:5173
+      - GF_SERVER_CORS_ALLOW_METHODS=GET,POST,OPTIONS
+      - GF_SERVER_CORS_ALLOW_HEADERS=*,Content-Type,Accept,Authorization,X-Requested-With
+      
+      # Logging (reduzido para evitar warnings)
+      - GF_LOG_LEVEL=warn
+      - GF_LOG_CONSOLE_FORMAT=console
+      
+      # Desabilitar métricas internas que causam conflito
+      - GF_METRICS_ENABLED=false
+      - GF_METRICS_DISABLE_TOTAL_STATS=true
+      
+      # Feature toggles
+      - GF_FEATURE_TOGGLES_ENABLE=accessControlOnCall
+      
+      # Alerting
+      - GF_ALERTING_ENABLED=false
+      - GF_UNIFIED_ALERTING_ENABLED=false
+      
+      # Dashboard provisioning
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/etc/grafana/provisioning/dashboards/aspnet-core-metrics.json
+      
+      # Database (usar SQLite em vez de métricas)
+      - GF_DATABASE_TYPE=sqlite3
+      - GF_DATABASE_PATH=/var/lib/grafana/grafana.db      
+    ports:
+      - "3000:3000"
+    volumes:
+      # Provisionamento
+      - ./grafana/datasources:/etc/grafana/provisioning/datasources
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./grafana/dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml
+      
+      # Persistência
+      - grafana-data:/var/lib/grafana
+      
+      # Configuração adicional (opcional)
+      - ./grafana/grafana.ini:/etc/grafana/grafana.ini
+      
+    user: "472:472"  # Usuário grafana padrão
+    restart: unless-stopped
+    #networks:
+    #  - monitoring
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+
+# Tempo
+  # Tempo runs as user 10001, and docker compose creates the volume as root.
+  # As such, we need to chown the volume in order for Tempo to start correctly.
+  init:
+    image: &tempoImage grafana/tempo:2.7.1
+    user: root
+    entrypoint:
+      - "chown"
+      - "10001:10001"
+      - "/var/tempo"
+    volumes:
+      - ./tempo-data:/var/tempo
+
+  memcached:
+    image: memcached:1.6.29
+    container_name: memcached
+    ports:
+      - "11211:11211"
+    environment:
+      - MEMCACHED_MAX_MEMORY=64m  # Set the maximum memory usage
+      - MEMCACHED_THREADS=4       # Number of threads to use
+
+  tempo:
+    image: *tempoImage
+    command: [ "-config.file=/etc/tempo.yaml" ]
+    volumes:
+      - ./tempo.yaml:/etc/tempo.yaml
+    ports:
+      - "3200:3200"   # tempo
+    depends_on:
+      - init
+      - memcached
+
+  postgres:
+    image: postgres
+    volumes:
+      - ./BaseContagemPostgreSql.sql:/docker-entrypoint-initdb.d/1-basecontagem.sql
+    environment:
+      POSTGRES_PASSWORD: "Postgres2025!"
+    ports:
+      - "5432:5432"
+
+volumes:
+  grafana-data:
+    driver: local

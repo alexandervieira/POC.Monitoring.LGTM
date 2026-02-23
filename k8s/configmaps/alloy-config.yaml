@@ -1,0 +1,98 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alloy-config
+  namespace: monitoring
+data:
+  config.alloy: |
+    // Configuração do Alloy para sanitização de dados sensíveis
+    logging {
+      level = "info"
+    }
+    
+    // Recebimento de telemetria da API
+    otelcol.receiver.otlp "default" {
+      grpc {
+        endpoint = "0.0.0.0:4317"
+      }
+      http {
+        endpoint = "0.0.0.0:4318"
+      }
+      
+      output {
+        metrics = [otelcol.processor.attributes.redact.input]
+        logs    = [otelcol.processor.attributes.redact.input]
+        traces  = [otelcol.processor.attributes.redact.input]
+      }
+    }
+    
+    // Processador de sanitização LGPD
+    otelcol.processor.attributes "redact" {
+      // Regex para identificação de padrões sensíveis
+      pattern = "CPF|cnpj|e-?mail|token|api_?key|password|senha"
+      
+      // Ações de redação
+      action {
+        key    = "body"
+        action = "update"
+        value  = "***REDACTED***"
+        pattern = "\\b[0-9]{3}\\.?[0-9]{3}\\.?[0-9]{3}-?[0-9]{2}\\b"  # CPF
+      }
+      
+      action {
+        key    = "body"
+        action = "update"
+        value  = "***REDACTED***"
+        pattern = "\\b[0-9]{2}\\.?[0-9]{3}\\.?[0-9]{3}\\/?[0-9]{4}-?[0-9]{2}\\b"  # CNPJ
+      }
+      
+      action {
+        key    = "body"
+        action = "update"
+        value  = "***EMAIL-REDACTED***"
+        pattern = "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Z|a-z]{2,}\\b"  # Email
+      }
+      
+      action {
+        key    = "attributes"
+        action = "update"
+        value  = "***REDACTED***"
+        pattern = "(?i)(token|api[_-]?key|password|senha)=[^&\\s]+"
+      }
+      
+      output {
+        metrics = [otelcol.exporter.prometheus.default.input]
+        logs    = [otelcol.exporter.loki.default.input]
+        traces  = [otelcol.exporter.otlp.tempo.input]
+      }
+    }
+    
+    // Exportadores
+    otelcol.exporter.prometheus "default" {
+      forward_to = [prometheus.remote_write.default.receiver]
+    }
+    
+    prometheus.remote_write "default" {
+      endpoint {
+        url = "http://prometheus:9090/api/v1/write"
+      }
+    }
+    
+    otelcol.exporter.loki "default" {
+      forward_to = [loki.write.gcs.receiver]
+    }
+    
+    loki.write "gcs" {
+      endpoint {
+        url = "http://loki:3100/loki/api/v1/push"
+      }
+    }
+    
+    otelcol.exporter.otlp "tempo" {
+      client {
+        endpoint = "tempo:4317"
+        tls {
+          insecure = true
+        }
+      }
+    }
