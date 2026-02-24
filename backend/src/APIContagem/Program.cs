@@ -2,12 +2,14 @@ using APIContagem;
 using APIContagem.Data;
 using APIContagem.Models;
 using APIContagem.Tracing;
-using Grafana.OpenTelemetry;
+using APIContagem.Logging;
 using Microsoft.EntityFrameworkCore;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
+using OpenTelemetry.Exporter;
+using APIContagem.GDPR;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,9 +20,12 @@ builder.Services.AddDbContext<ContagemPostgresContext>(options =>
         o => o.UseNodaTime());
 });
 
+var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"] ?? "http://localhost:4317";
+
 var resourceBuilder = ResourceBuilder.CreateDefault()
     .AddService(serviceName: OpenTelemetryExtensions.ServiceName,
         serviceVersion: OpenTelemetryExtensions.ServiceVersion);
+
 builder.Services.AddOpenTelemetry()
     .WithTracing((traceBuilder) =>
     {
@@ -30,17 +35,27 @@ builder.Services.AddOpenTelemetry()
             .AddAspNetCoreInstrumentation()
             .AddHttpClientInstrumentation()
             .AddEntityFrameworkCoreInstrumentation()
-            .UseGrafana();
+            .AddOtlpExporter(options =>
+            {
+                options.Endpoint = new Uri(otlpEndpoint);
+                options.Protocol = OtlpExportProtocol.Grpc;
+            });
     });
+
 builder.Logging.AddOpenTelemetry(options =>
 {
     options.SetResourceBuilder(resourceBuilder);
-    options.IncludeFormattedMessage = true;
+    options.IncludeFormattedMessage = false;
     options.IncludeScopes = true;
-    options.ParseStateValues = true;
-    options.AttachLogsToActivityEvent();
-    options.UseGrafana();
+    options.ParseStateValues = false;
+    options.AddProcessor(new SensitiveDataLogProcessor());
+    options.AddOtlpExporter(otlpOptions =>
+    {
+        otlpOptions.Endpoint = new Uri(otlpEndpoint);
+        otlpOptions.Protocol = OtlpExportProtocol.Grpc;
+    });
 });
+
 builder.Services.AddOpenTelemetry()
     .WithMetrics((metricBuilder) =>
     {
@@ -62,18 +77,18 @@ builder.Services.AddOpenTelemetry()
             .AddRuntimeInstrumentation()
             .AddProcessInstrumentation()
             .AddHttpClientInstrumentation()
-            .AddConsoleExporter()
             .AddPrometheusExporter(options =>
             {
                 options.ScrapeResponseCacheDurationMilliseconds = 0;
-            })
-            .UseGrafana();
+            });
     });
 
 builder.Services.AddOpenApi();
 
 builder.Services.AddScoped<ContagemRepository>();
 builder.Services.AddSingleton<Contador>();
+builder.Services.AddSingleton(new byte[32]); // Chave AES (em produção, use Key Vault)
+builder.Services.AddHttpClient();
 
 var app = builder.Build();
 
@@ -140,6 +155,67 @@ app.MapGet("/error", () =>
     app.Logger.LogError("Simulação de erro interno (500).");
 
     throw new InvalidOperationException("Erro simulado para teste de métricas");
+});
+
+app.MapGet("/test-lgpd", () =>
+{
+    using var activity = OpenTelemetryExtensions.ActivitySource
+        .StartActivity("TesteLGPD")!;
+
+    app.Logger.LogInformation("Usuário CPF 123.456.789-10 acessou o sistema");
+    app.Logger.LogInformation("Email de contato: teste@email.com, telefone (11) 98765-4321");
+    app.Logger.LogInformation("Cartão registrado: 4111 1111 1111 1111");
+    app.Logger.LogInformation("CNPJ da empresa: 12.345.678/0001-90");
+    app.Logger.LogInformation("Token JWT: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U");
+
+    return Results.Ok(new { 
+        Message = "Logs com dados sensíveis enviados. Verifique o Loki - dados devem estar sanitizados.",
+        Expected = new[] {
+            "CPF -> ***CPF-REDACTED***",
+            "Email -> ***EMAIL-REDACTED***",
+            "Telefone -> ***PHONE-REDACTED***",
+            "Cartão -> ***CARD-REDACTED***",
+            "CNPJ -> ***CNPJ-REDACTED***",
+            "JWT -> ***JWT-REDACTED***"
+        }
+    });
+});
+
+app.MapGet("/test-lgpd-hash", () =>
+{
+    var cpf = "123.456.789-10";
+    var userHash = UserHashService.GenerateHash(cpf);
+    
+    using var activity = OpenTelemetryExtensions.ActivitySource
+        .StartActivity("TesteLGPDHash")!;
+    
+    activity.SetTag("user.id", userHash);
+    
+    using (app.Logger.BeginScope(new Dictionary<string, object>
+    {
+        ["user.id"] = userHash
+    }))
+    {
+        app.Logger.LogInformation("Usuário acessou o sistema");
+        app.Logger.LogInformation("Ação realizada com sucesso");
+    }
+    
+    return Results.Ok(new { 
+        UserHash = userHash,
+        Message = "Logs associados ao user_id hash, não ao CPF real"
+    });
+});
+
+app.MapDelete("/gdpr/user/{cpf}", async (string cpf, IHttpClientFactory httpClientFactory) =>
+{
+    var userHash = UserHashService.GenerateHash(cpf);
+    var httpClient = httpClientFactory.CreateClient();
+    
+    // Deletar logs no Loki
+    var lokiUrl = $"http://localhost:3100/loki/api/v1/delete?query={{user_id=\"{userHash}\"}}";
+    await httpClient.PostAsync(lokiUrl, null);
+    
+    return Results.Ok(new { Message = "Dados excluídos conforme LGPD", UserHash = userHash });
 });
 
 app.Run();

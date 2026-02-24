@@ -1,24 +1,41 @@
 ﻿{
   "$schema": "https://json.schemastore.org/launchsettings.json",
   "profiles": {
-    "http": {
+    "APIContagem": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "launchUrl": "swagger",
       "applicationUrl": "http://localhost:5101",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4317",       
+        "OTEL_SERVICE_NAME": "apicontagem",
+        "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
+        "ConnectionStrings__BaseContagemPostgres": "Host=localhost;Port=5432;Database=basecontagem;Username=postgres;Password=Postgres2025!"
       }
     },
-    "https": {
+    "APIContagem - Docker": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "launchUrl": "swagger",
-      "applicationUrl": "https://localhost:7101;http://localhost:5101",
+      "applicationUrl": "http://localhost:5101",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "http://alloy:4317",
+        "OTEL_SERVICE_NAME": "apicontagem",
+        "ConnectionStrings__BaseContagemPostgres": "Host=postgres;Port=5432;Database=basecontagem;Username=postgres;Password=Postgres2025!"
+      }
+    },
+    "APIContagem - Production": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "applicationUrl": "http://localhost:5101",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Production",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4317",
+        "OTEL_SERVICE_NAME": "apicontagem-prod",
+        "ConnectionStrings__BaseContagemPostgres": "Host=localhost;Port=5432;Database=basecontagem;Username=postgres;Password=Postgres2025!"
       }
     }
   }
