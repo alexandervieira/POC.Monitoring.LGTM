@@ -1,0 +1,90 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  namespace: monitoring
+data:
+  otel-collector-config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+
+    processors:
+      # Sanitização LGPD - Remove dados sensíveis
+      transform/logs:
+        log_statements:
+          - context: log
+            statements:
+              # Sanitizar CPF
+              - replace_pattern(body, "\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}", "***CPF-REDACTED***")
+              - replace_pattern(body, "\\d{11}", "***CPF-REDACTED***")
+              
+              # Sanitizar Email
+              - replace_pattern(body, "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}", "***EMAIL-REDACTED***")
+              
+              # Sanitizar Telefone
+              - replace_pattern(body, "\\(?\\d{2}\\)?\\s?\\d{4,5}-?\\d{4}", "***PHONE-REDACTED***")
+              
+              # Sanitizar Cartão de Crédito
+              - replace_pattern(body, "\\d{4}[\\s-]?\\d{4}[\\s-]?\\d{4}[\\s-]?\\d{4}", "***CARD-REDACTED***")
+              
+              # Sanitizar CNPJ
+              - replace_pattern(body, "\\d{2}\\.\\d{3}\\.\\d{3}/\\d{4}-\\d{2}", "***CNPJ-REDACTED***")
+              
+              # Sanitizar JWT
+              - replace_pattern(body, "eyJ[A-Za-z0-9-_=]+\\.[A-Za-z0-9-_=]+\\.?[A-Za-z0-9-_.+/=]*", "***JWT-REDACTED***")
+              
+              # Sanitizar todos os atributos
+              - replace_all_patterns(attributes, "value", "\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}", "***CPF-REDACTED***")
+              - replace_all_patterns(attributes, "value", "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}", "***EMAIL-REDACTED***")
+              - replace_all_patterns(attributes, "value", "\\(?\\d{2}\\)?\\s?\\d{4,5}-?\\d{4}", "***PHONE-REDACTED***")
+              - replace_all_patterns(attributes, "value", "\\d{4}[\\s-]?\\d{4}[\\s-]?\\d{4}[\\s-]?\\d{4}", "***CARD-REDACTED***")
+              - replace_all_patterns(attributes, "value", "eyJ[A-Za-z0-9-_=]+\\.[A-Za-z0-9-_=]+\\.?[A-Za-z0-9-_.+/=]*", "***JWT-REDACTED***")
+
+      # Remover headers sensíveis
+      attributes/delete:
+        actions:
+          - key: http.request.header.authorization
+            action: delete
+          - key: http.request.header.cookie
+            action: delete
+          - key: http.response.header.set-cookie
+            action: delete
+
+      batch:
+        timeout: 10s
+        send_batch_size: 1024
+
+    exporters:
+      loki:
+        endpoint: http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push
+        
+      otlp/tempo:
+        endpoint: http://tempo.monitoring.svc.cluster.local:4317
+        tls:
+          insecure: true
+          
+      prometheus:
+        endpoint: 0.0.0.0:8889
+        namespace: otel
+
+    service:
+      pipelines:
+        logs:
+          receivers: [otlp]
+          processors: [transform/logs, attributes/delete, batch]
+          exporters: [loki]
+          
+        traces:
+          receivers: [otlp]
+          processors: [attributes/delete, batch]
+          exporters: [otlp/tempo]
+          
+        metrics:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [prometheus]

@@ -48,121 +48,162 @@
 - Necessidade de setup rápido
 - Orçamento não é limitação
 
-### 1.3. Comparação de Custos (Exemplo: 100GB/mês)
+---
 
-| Item | Stack LGTM (GCP) | Stack LGTM (Azure) | Application Insights |
-|------|------------------|--------------------|--------------------|
-| Ingestão | $0 (self-hosted) | $0 (self-hosted) | $230/mês |
-| Storage | $20/mês (GCS) | $18/mês (Blob) | Incluído |
-| Compute | $150/mês (GKE) | $140/mês (AKS) | N/A |
-| **Total** | **$170/mês** | **$158/mês** | **$230/mês** |
+## 2. Decisão Arquitetural: Grafana Self-Hosted (AKS/GKE)
 
-**Economia com LGTM:** ~25-30% em escala
+### 2.1. ✅ Implementação: Grafana Self-Hosted
+
+**Decisão Final:** Grafana será implantado **self-hosted no AKS (Azure) e GKE (GCP)** junto com toda a stack LGTM.
+
+**Justificativa:**
+- 💰 **Custo**: Azure Managed Grafana adiciona $100/mês sem reduzir complexidade
+- 🔒 **LGPD**: Controle total sobre sanitização e retenção
+- 🎯 **Consistência**: Toda stack no mesmo cluster (Loki, Tempo, Prometheus, Grafana)
+- 🔧 **Flexibilidade**: Plugins ilimitados e customizações completas
+
+### 2.2. Arquitetura Implementada (Azure)
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                      Azure VNet                          │
+│  ┌────────────────────────────────────────────────────┐ │
+│  │                    AKS Cluster                      │ │
+│  │  ┌──────────────────────────────────────────────┐  │ │
+│  │  │         Namespace: monitoring                 │  │ │
+│  │  │                                                │  │ │
+│  │  │  ┌─────────────────────────────────────────┐ │  │ │
+│  │  │  │   OpenTelemetry Collector (LGPD)        │ │  │ │
+│  │  │  │   - Transform processor (sanitização)   │ │  │ │
+│  │  │  │   - Attributes delete (headers)         │ │  │ │
+│  │  │  └──────────┬──────────────────────────────┘ │  │ │
+│  │  │             │                                 │  │ │
+│  │  │    ┌────────┴────────┬──────────┬──────────┐│  │ │
+│  │  │    ▼                 ▼          ▼          ▼│  │ │
+│  │  │  ┌────┐          ┌─────┐    ┌────┐    ┌────┐│  │ │
+│  │  │  │Loki│          │Tempo│    │Prom│    │Graf││  │ │
+│  │  │  └──┬─┘          └──┬──┘    └──┬─┘    └────┘│  │ │
+│  │  └─────┼───────────────┼──────────┼────────────┘  │ │
+│  └────────┼───────────────┼──────────┼───────────────┘ │
+└───────────┼───────────────┼──────────┼─────────────────┘
+            │               │          │
+            ▼               ▼          ▼
+    ┌───────────────────────────────────────────┐
+    │      Azure Blob Storage (90d TTL)         │
+    │  ┌──────────┐ ┌──────────┐ ┌──────────┐ │
+    │  │loki-logs │ │tempo-    │ │prometheus││
+    │  │          │ │traces    │ │-metrics  ││
+    │  └──────────┘ └──────────┘ └──────────┘ │
+    └───────────────────────────────────────────┘
+```
+
+### 2.3. Arquitetura Implementada (GCP)
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                      GCP VPC                             │
+│  ┌────────────────────────────────────────────────────┐ │
+│  │                    GKE Cluster                      │ │
+│  │  ┌──────────────────────────────────────────────┐  │ │
+│  │  │         Namespace: monitoring                 │  │ │
+│  │  │                                                │  │ │
+│  │  │  ┌─────────────────────────────────────────┐ │  │ │
+│  │  │  │   OpenTelemetry Collector (LGPD)        │ │  │ │
+│  │  │  │   - Transform processor (sanitização)   │ │  │ │
+│  │  │  │   - Attributes delete (headers)         │ │  │ │
+│  │  │  └──────────┬──────────────────────────────┘ │  │ │
+│  │  │             │                                 │  │ │
+│  │  │    ┌────────┴────────┬──────────┬──────────┐│  │ │
+│  │  │    ▼                 ▼          ▼          ▼│  │ │
+│  │  │  ┌────┐          ┌─────┐    ┌────┐    ┌────┐│  │ │
+│  │  │  │Loki│          │Tempo│    │Prom│    │Graf││  │ │
+│  │  │  └──┬─┘          └──┬──┘    └──┬─┘    └────┘│  │ │
+│  │  └─────┼───────────────┼──────────┼────────────┘  │ │
+│  └────────┼───────────────┼──────────┼───────────────┘ │
+└───────────┼───────────────┼──────────┼─────────────────┘
+            │               │          │
+            ▼               ▼          ▼
+    ┌───────────────────────────────────────────┐
+    │   Google Cloud Storage (90d lifecycle)    │
+    │  ┌──────────┐ ┌──────────┐ ┌──────────┐ │
+    │  │loki-logs │ │tempo-    │ │prometheus││
+    │  │          │ │traces    │ │-metrics  ││
+    │  └──────────┘ └──────────┘ └──────────┘ │
+    └───────────────────────────────────────────┘
+```
+
+### 2.4. Comparação: Self-Hosted vs Managed Grafana
+
+| Aspecto | Self-Hosted (AKS/GKE) | Azure Managed Grafana |
+|---------|----------------------|----------------------|
+| **Grafana** | Self-managed | Managed |
+| **Loki** | Self-managed (AKS) | **Self-managed (AKS)** ⚠️ |
+| **Tempo** | Self-managed (AKS) | **Self-managed (AKS)** ⚠️ |
+| **Prometheus** | Self-managed (AKS) | **Self-managed (AKS)** ⚠️ |
+| **OTel Collector** | Self-managed (AKS) | **Self-managed (AKS)** ⚠️ |
+| **Custo (100GB)** | $161/mês (Azure) | $261/mês (Azure) |
+| **Custo (100GB)** | $240/mês (GCP) | N/A |
+| **Complexidade** | Alta | Média-Alta |
+| **Controle LGPD** | Total | Limitado |
+| **Plugins** | Ilimitados | Limitados |
+
+**⚠️ Importante:** Azure Managed Grafana **NÃO elimina** AKS. Você ainda precisa gerenciar Loki, Tempo, Prometheus e OpenTelemetry Collector no AKS.
 
 ---
 
-## 2. Stack LGTM no GCP vs Azure Managed Grafana
+## 3. LGPD: Sanitização e Anonimização (Implementado)
 
-### 2.1. Stack LGTM Self-Hosted no GCP
+### 3.1. Camadas de Proteção Implementadas
 
-**Arquitetura:**
-```
-Cloud Run (API) → OpenTelemetry Collector → GKE
-                                              ├── Loki (logs)
-                                              ├── Tempo (traces)
-                                              ├── Prometheus (metrics)
-                                              └── Grafana (visualização)
-```
-
-**Vantagens:**
-- ✅ **Controle Total**: Configuração completa
-- ✅ **Custo**: Mais barato em escala
-- ✅ **LGPD**: Sanitização customizada
-- ✅ **Performance**: Otimização dedicada
-
-**Desvantagens:**
-- ❌ **Gerenciamento**: Requer DevOps
-- ❌ **Atualizações**: Manuais
-- ❌ **HA**: Configuração complexa
-
-**Custos Estimados (100GB/mês):**
-- GKE (3 nodes n1-standard-2): $150/mês
-- Cloud Storage: $20/mês
-- Cloud SQL (PostgreSQL): $50/mês
-- Load Balancer: $20/mês
-- **Total: $240/mês**
-
-### 2.2. Azure Managed Grafana + Stack LGTM
-
-**Arquitetura:**
-```
-Container Apps (API) → OpenTelemetry Collector → AKS
-                                                  ├── Loki (logs)
-                                                  ├── Tempo (traces)
-                                                  └── Prometheus (metrics)
-                                                  
-Azure Managed Grafana (visualização)
+**1. Aplicação (.NET 10)**
+```csharp
+// SensitiveDataLogProcessor
+builder.Logging.AddOpenTelemetry(options => {
+    options.IncludeFormattedMessage = false;  // Remove OriginalFormat
+    options.ParseStateValues = false;          // Remove state parsing
+    options.AddProcessor(new SensitiveDataLogProcessor());
+});
 ```
 
-**Vantagens:**
-- ✅ **Grafana Gerenciado**: Sem manutenção
-- ✅ **Integração**: Nativa com Azure Monitor
-- ✅ **HA**: Alta disponibilidade automática
-- ✅ **Segurança**: Azure AD integrado
+**2. OpenTelemetry Collector (Terraform)**
+```yaml
+processors:
+  transform/logs:
+    log_statements:
+      - context: log
+        statements:
+          - replace_pattern(body, "\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}", "***CPF-REDACTED***")
+          - replace_pattern(body, "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}", "***EMAIL-REDACTED***")
+          - replace_all_patterns(attributes, "value", "\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}", "***CPF-REDACTED***")
+  
+  attributes/delete:
+    actions:
+      - key: http.request.header.authorization
+        action: delete
+```
 
-**Desvantagens:**
-- ❌ **Custo**: Managed Grafana é caro
-- ❌ **Limitações**: Menos plugins disponíveis
-- ❌ **Vendor Lock-in**: Preso ao Azure
+**3. Storage (Terraform)**
+```hcl
+# Azure Blob Storage
+lifecycle_rule {
+  condition {
+    age = 90
+  }
+  action {
+    type = "Delete"
+  }
+}
 
-**Custos Estimados (100GB/mês):**
-- AKS (3 nodes Standard_D2s_v3): $140/mês
-- Azure Blob Storage: $18/mês
-- Azure Database for PostgreSQL: $60/mês
-- Azure Managed Grafana: $100/mês
-- Load Balancer: $25/mês
-- **Total: $343/mês**
-
-### 2.3. Comparação Técnica
-
-| Recurso | GCP Self-Hosted | Azure Managed Grafana |
-|---------|-----------------|----------------------|
-| Grafana | Self-managed | Managed |
-| Loki | Self-managed | Self-managed |
-| Tempo | Self-managed | Self-managed |
-| Prometheus | Self-managed | Self-managed |
-| HA | Manual | Automático (Grafana) |
-| Backup | Manual | Automático (Grafana) |
-| Atualizações | Manual | Automático (Grafana) |
-| Custo | $240/mês | $343/mês |
-| Complexidade | Alta | Média |
-
-**Recomendação:**
-- **GCP Self-Hosted**: Para equipes com DevOps experiente e orçamento limitado
-- **Azure Managed Grafana**: Para equipes menores que priorizam simplicidade
-
----
-
-## 3. LGPD: Sanitização e Anonimização
-
-### 3.1. Estratégia de Sanitização
-
-**Camadas de Proteção:**
-
-1. **Aplicação (.NET)**
-   - `SensitiveDataLogProcessor`: Sanitiza logs antes de enviar
-   - `IncludeFormattedMessage = false`: Remove OriginalFormat
-   - `ParseStateValues = false`: Remove state parsing
-
-2. **OpenTelemetry Collector**
-   - `transform/logs`: Sanitiza body com regex
-   - `replace_all_patterns`: Sanitiza todos atributos
-   - `attributes processor`: Deleta headers sensíveis
-
-3. **Loki**
-   - Retenção de 90 dias
-   - Compactor para limpeza automática
-   - API de exclusão para direito ao esquecimento
+# GCP Cloud Storage
+lifecycle_rule {
+  condition {
+    age = 90
+  }
+  action {
+    type = "Delete"
+  }
+}
+```
 
 ### 3.2. Dados Sanitizados
 
@@ -177,28 +218,19 @@ Azure Managed Grafana (visualização)
 
 ### 3.3. Anonimização com User Hash
 
-**Fluxo:**
-```
-1. Usuário faz login com CPF
-2. Sistema gera SHA256(CPF) = user_hash
-3. Logs usam user_hash (não CPF)
-4. Tabela UserMapping armazena CPF criptografado (AES-256)
-5. Após 90 dias ou solicitação: DELETE logs WHERE user_id = user_hash
-```
-
-**Exemplo:**
 ```csharp
-var cpf = "123.456.789-10";
-var userHash = SHA256(cpf); // "065af45fe97a5de193a1eb67511d454e9fdf950e29137dd220d91290df2a96c3"
+// UserHashService.cs
+public string GenerateUserHash(string cpf)
+{
+    using var sha256 = SHA256.Create();
+    var bytes = Encoding.UTF8.GetBytes(cpf);
+    var hash = sha256.ComputeHash(bytes);
+    return Convert.ToHexString(hash).ToLower();
+}
 
-// Log com hash
-logger.LogInformation("Usuário {UserId} acessou", userHash);
-
-// Query no Loki
-{service_name="apicontagem", user_id="065af45fe97a5de193a1eb67511d454e9fdf950e29137dd220d91290df2a96c3"}
-
-// Exclusão GDPR
-DELETE FROM loki WHERE user_id = "065af45fe97a5de193a1eb67511d454e9fdf950e29137dd220d91290df2a96c3"
+// Uso nos logs
+var userHash = _userHashService.GenerateUserHash(cpf);
+_logger.LogInformation("Usuário {UserId} acessou", userHash);
 ```
 
 ### 3.4. Conformidade LGPD
@@ -213,204 +245,139 @@ DELETE FROM loki WHERE user_id = "065af45fe97a5de193a1eb67511d454e9fdf950e29137d
 
 ---
 
-## 4. Retenção em Conformidade com LGPD
+## 4. Infraestrutura como Código (Terraform)
 
-### 4.1. Configuração de Retenção
+### 4.1. Módulos Implementados
 
-**Loki (90 dias):**
-```yaml
-limits_config:
-  retention_period: 90d
-
-compactor:
-  retention_enabled: true
-  retention_delete_delay: 2h
-  retention_delete_worker_count: 150
-  delete_request_store: filesystem
+**Azure:**
+```
+terraform/azure/
+├── modules/
+│   ├── network/          # VNet, Subnets, DNS
+│   ├── aks/              # Kubernetes cluster
+│   ├── storage/          # Blob Storage (90d lifecycle)
+│   ├── postgresql/       # Flexible Server
+│   ├── container-apps/   # Backend API
+│   └── monitoring/       # LGTM Stack + OTel Collector
+└── environments/
+    ├── dev/
+    ├── staging/
+    └── prod/
 ```
 
-**Tempo (90 dias):**
-```yaml
-storage:
-  trace:
-    backend: local
-    local:
-      path: /var/tempo/blocks
-    
-compactor:
-  compaction:
-    block_retention: 2160h  # 90 dias
+**GCP:**
+```
+terraform/gcp/
+├── modules/
+│   ├── networking/       # VPC, Subnets
+│   ├── gke/              # Kubernetes cluster
+│   ├── cloud-storage/    # GCS buckets (90d lifecycle)
+│   ├── cloud-sql/        # PostgreSQL
+│   ├── cloud-run/        # Backend API
+│   └── monitoring/       # LGTM Stack + OTel Collector
+└── environments/
+    ├── dev/
+    ├── stage/
+    └── prod/
 ```
 
-**PostgreSQL (90 dias):**
-```sql
--- Job de limpeza automática
-CREATE OR REPLACE FUNCTION cleanup_old_data()
-RETURNS void AS $$
-BEGIN
-  DELETE FROM "HistoricoContagem" 
-  WHERE "DataProcessamento" < NOW() - INTERVAL '90 days';
-  
-  DELETE FROM "UserMapping" 
-  WHERE "RetentionUntil" < NOW();
-END;
-$$ LANGUAGE plpgsql;
+### 4.2. Deploy Automatizado
 
--- Agendar execução diária
-SELECT cron.schedule('cleanup-job', '0 2 * * *', 'SELECT cleanup_old_data()');
+**Azure:**
+```bash
+cd terraform/azure/environments/dev
+terraform init
+terraform apply
+
+# Outputs
+# - otel_collector_endpoint: http://otel-collector...svc.cluster.local:4317
+# - grafana_url: http://<public-ip>
+# - container_app_url: https://<app>.azurecontainerapps.io
 ```
 
-### 4.2. Processo de Exclusão (Direito ao Esquecimento)
+**GCP:**
+```bash
+cd terraform/gcp/environments/dev
+terraform init
+terraform apply
 
-**API Endpoint:**
-```http
-DELETE /gdpr/user/{cpf}
-```
-
-**Fluxo:**
-1. Gerar user_hash do CPF
-2. Deletar logs no Loki: `DELETE {user_id="hash"}`
-3. Deletar traces no Tempo (via TTL automático)
-4. Deletar dados no PostgreSQL
-5. Deletar entrada na UserMapping
-6. Retornar confirmação
-
-**Tempo de Processamento:**
-- Loki: Imediato (soft delete) + 2h (hard delete)
-- Tempo: Até 90 dias (TTL)
-- PostgreSQL: Imediato
-
-### 4.3. Auditoria de Exclusão
-
-```sql
-CREATE TABLE "DeletionAudit" (
-    "Id" SERIAL PRIMARY KEY,
-    "UserHash" VARCHAR(64) NOT NULL,
-    "RequestedAt" TIMESTAMP DEFAULT NOW(),
-    "CompletedAt" TIMESTAMP,
-    "Status" VARCHAR(20),
-    "RequestedBy" VARCHAR(100)
-);
+# Outputs
+# - otel_collector_endpoint: http://otel-collector...svc.cluster.local:4317
+# - grafana_service: grafana.monitoring.svc.cluster.local
 ```
 
 ---
 
-## 5. Estimativas de Custos
+## 5. Estimativas de Custos (Atualizadas)
 
-### 5.1. GCP (Self-Hosted)
-
-**Cenário: 100GB logs/mês, 50GB traces/mês, 10GB metrics/mês**
+### 5.1. Azure Self-Hosted (Implementado)
 
 | Recurso | Especificação | Custo/mês |
 |---------|---------------|-----------|
-| GKE Cluster | 3x n1-standard-2 (2 vCPU, 7.5GB RAM) | $150 |
-| Cloud Storage | 160GB Standard | $26 |
-| Cloud SQL | db-n1-standard-1 (PostgreSQL) | $50 |
-| Load Balancer | 1 IP + tráfego | $20 |
-| Cloud NAT | Tráfego de saída | $15 |
-| **Total** | | **$261/mês** |
+| AKS | 2x Standard_D2s_v3 | $93 |
+| Blob Storage | 160GB LRS + lifecycle | $18 |
+| PostgreSQL | B_Standard_B1ms | $30 |
+| Container Apps | 1 app, 0.25 vCPU | $20 |
+| Load Balancer | Standard | $20 |
+| **Total** | | **$161/mês** |
 
-**Escalabilidade:**
-- 500GB/mês: $450/mês
-- 1TB/mês: $750/mês
-
-### 5.2. Azure (Managed Grafana)
-
-**Cenário: 100GB logs/mês, 50GB traces/mês, 10GB metrics/mês**
+### 5.2. GCP Self-Hosted (Implementado)
 
 | Recurso | Especificação | Custo/mês |
 |---------|---------------|-----------|
-| AKS Cluster | 3x Standard_D2s_v3 (2 vCPU, 8GB RAM) | $140 |
-| Blob Storage | 160GB Hot tier | $25 |
-| Azure Database | Standard B2s (PostgreSQL) | $60 |
-| Managed Grafana | Standard tier | $100 |
-| Load Balancer | Standard + tráfego | $30 |
-| **Total** | | **$355/mês** |
+| GKE | 2x n1-standard-2 | $100 |
+| Cloud Storage | 160GB Standard + lifecycle | $26 |
+| Cloud SQL | db-n1-standard-1 | $50 |
+| Cloud Run | 1 service, 0.25 vCPU | $20 |
+| Load Balancer | 1 IP | $20 |
+| **Total** | | **$216/mês** |
 
-**Escalabilidade:**
-- 500GB/mês: $620/mês
-- 1TB/mês: $1,050/mês
+### 5.3. Comparação Final
 
-### 5.3. Application Insights (Azure)
-
-**Cenário: 100GB logs/mês**
-
-| Recurso | Especificação | Custo/mês |
-|---------|---------------|-----------|
-| Ingestão | 100GB @ $2.30/GB | $230 |
-| Retenção | 90 dias (incluído) | $0 |
-| Queries | Ilimitadas | $0 |
-| **Total** | | **$230/mês** |
-
-**Escalabilidade:**
-- 500GB/mês: $1,150/mês
-- 1TB/mês: $2,300/mês
-
-### 5.4. Comparação de ROI
-
-**Break-even Point (quando LGTM compensa):**
-
-| Volume/mês | GCP LGTM | Azure LGTM | App Insights | Economia LGTM |
-|------------|----------|------------|--------------|---------------|
-| 50GB | $200 | $280 | $115 | -$85 |
-| 100GB | $261 | $355 | $230 | +$0 |
-| 200GB | $350 | $480 | $460 | +$110 |
-| 500GB | $450 | $620 | $1,150 | +$700 |
-| 1TB | $750 | $1,050 | $2,300 | +$1,550 |
-
-**Conclusão:**
-- **< 100GB/mês**: Application Insights é mais econômico
-- **> 200GB/mês**: Stack LGTM é significativamente mais barato
-- **> 500GB/mês**: Economia de 60-70% com LGTM
-
-### 5.5. Custos Ocultos
-
-**Stack LGTM:**
-- DevOps: 20-40h/mês (setup + manutenção)
-- Treinamento: 40h (one-time)
-- Monitoramento: 10h/mês
-
-**Application Insights:**
-- Configuração: 5h (one-time)
-- Manutenção: 2h/mês
-- Treinamento: 10h (one-time)
+| Volume/mês | Azure Self-Hosted | GCP Self-Hosted | App Insights | Economia |
+|------------|-------------------|-----------------|--------------|----------|
+| 100GB | $161 | $216 | $230 | 30-43% |
+| 500GB | $280 | $350 | $1,150 | 70-76% |
+| 1TB | $450 | $550 | $2,300 | 75-80% |
 
 ---
 
-## 6. Recomendações
+## 6. Recomendações Finais
 
-### 6.1. Quando Usar Stack LGTM
+### 6.1. Quando Usar Stack LGTM Self-Hosted
 
-✅ Volume > 200GB/mês  
-✅ Multi-cloud ou migração futura  
+✅ Volume > 100GB/mês  
 ✅ Requisitos rigorosos de LGPD  
+✅ Multi-cloud ou migração futura  
 ✅ Equipe DevOps experiente  
 ✅ Necessidade de customização  
 ✅ Orçamento limitado em escala  
 
 ### 6.2. Quando Usar Application Insights
 
-✅ Volume < 100GB/mês  
-✅ 100% Azure  
+✅ Volume < 50GB/mês  
+✅ 100% Azure sem planos de mudança  
 ✅ Equipe pequena sem DevOps  
 ✅ Necessidade de setup rápido  
 ✅ Orçamento não é limitação  
-✅ Integração nativa com .NET  
 
-### 6.3. Quando Usar Azure Managed Grafana
+### 6.3. ❌ NÃO Usar Azure Managed Grafana
 
-✅ Volume 100-500GB/mês  
-✅ Equipe média com DevOps básico  
-✅ Necessidade de Grafana gerenciado  
-✅ Integração com Azure AD  
-✅ Orçamento médio  
+❌ Adiciona $100/mês sem reduzir complexidade  
+❌ Ainda precisa gerenciar AKS + Loki + Tempo + Prometheus  
+❌ Menos controle sobre LGPD  
+❌ Plugins limitados  
+
+**Exceção:** Apenas se já usa Azure Monitor extensivamente e precisa de visualização unificada com Azure AD.
 
 ---
 
 ## 7. Próximos Passos
 
-1. **POC**: Testar localmente com Docker Compose
-2. **Piloto**: Deploy em ambiente de dev (GCP ou Azure)
-3. **Validação**: Testar sanitização LGPD
-4. **Produção**: Deploy gradual com monitoramento
-5. **Otimização**: Ajustar retenção e custos
+1. ✅ **Terraform**: Infraestrutura provisionada (Azure + GCP)
+2. ✅ **LGPD**: Sanitização implementada (4 camadas)
+3. ✅ **Retenção**: 90 dias configurado (storage lifecycle)
+4. 🔄 **CI/CD**: Configurar pipelines de deploy
+5. 🔄 **Dashboards**: Importar templates Grafana (19924, 19925)
+6. 🔄 **Alertas**: Configurar Prometheus AlertManager
+7. 🔄 **Testes**: Validar sanitização em produção

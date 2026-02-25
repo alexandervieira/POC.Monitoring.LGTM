@@ -1,0 +1,29 @@
+loki:
+  auth_enabled: false
+  
+  storage:
+    type: gcs
+    gcs:
+      bucket_name: ${gcs_bucket_name}
+  
+  limits_config:
+    retention_period: 90d
+    ingestion_rate_mb: 10
+    ingestion_burst_size_mb: 20
+  
+  compactor:
+    retention_enabled: true
+    retention_delete_delay: 2h
+    retention_delete_worker_count: 150
+    delete_request_store: gcs
+
+write:
+  replicas: 2
+  persistence:
+    size: 10Gi
+
+read:
+  replicas: 2
+
+backend:
+  replicas: 2

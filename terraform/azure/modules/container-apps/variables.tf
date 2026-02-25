@@ -14,14 +14,14 @@ variable "subnet_id" {
   type = string
 }
 
-variable "node_count" {
-  type    = number
-  default = 2
+variable "otel_endpoint" {
+  type    = string
+  default = "http://alloy.monitoring.svc.cluster.local:4317"
 }
 
-variable "vm_size" {
-  type    = string
-  default = "Standard_D2s_v3"
+variable "db_connection_string" {
+  type      = string
+  sensitive = true
 }
 
 variable "tags" {

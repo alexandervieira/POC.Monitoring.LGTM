@@ -1,0 +1,104 @@
+mode: deployment
+
+replicaCount: 2
+
+image:
+  repository: otel/opentelemetry-collector-contrib
+  tag: 0.91.0
+
+config:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+  processors:
+    transform/logs:
+      log_statements:
+        - context: log
+          statements:
+            - replace_pattern(body, "\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}", "***CPF-REDACTED***")
+            - replace_pattern(body, "\\d{11}", "***CPF-REDACTED***")
+            - replace_pattern(body, "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}", "***EMAIL-REDACTED***")
+            - replace_pattern(body, "\\(?\\d{2}\\)?\\s?\\d{4,5}-?\\d{4}", "***PHONE-REDACTED***")
+            - replace_pattern(body, "\\d{4}[\\s-]?\\d{4}[\\s-]?\\d{4}[\\s-]?\\d{4}", "***CARD-REDACTED***")
+            - replace_pattern(body, "\\d{2}\\.\\d{3}\\.\\d{3}/\\d{4}-\\d{2}", "***CNPJ-REDACTED***")
+            - replace_pattern(body, "eyJ[A-Za-z0-9-_=]+\\.[A-Za-z0-9-_=]+\\.?[A-Za-z0-9-_.+/=]*", "***JWT-REDACTED***")
+            - replace_all_patterns(attributes, "value", "\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}", "***CPF-REDACTED***")
+            - replace_all_patterns(attributes, "value", "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}", "***EMAIL-REDACTED***")
+            - replace_all_patterns(attributes, "value", "\\(?\\d{2}\\)?\\s?\\d{4,5}-?\\d{4}", "***PHONE-REDACTED***")
+            - replace_all_patterns(attributes, "value", "\\d{4}[\\s-]?\\d{4}[\\s-]?\\d{4}[\\s-]?\\d{4}", "***CARD-REDACTED***")
+            - replace_all_patterns(attributes, "value", "eyJ[A-Za-z0-9-_=]+\\.[A-Za-z0-9-_=]+\\.?[A-Za-z0-9-_.+/=]*", "***JWT-REDACTED***")
+
+    attributes/delete:
+      actions:
+        - key: http.request.header.authorization
+          action: delete
+        - key: http.request.header.cookie
+          action: delete
+        - key: http.response.header.set-cookie
+          action: delete
+
+    batch:
+      timeout: 10s
+      send_batch_size: 1024
+
+  exporters:
+    loki:
+      endpoint: http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push
+      
+    otlp/tempo:
+      endpoint: http://tempo.monitoring.svc.cluster.local:4317
+      tls:
+        insecure: true
+        
+    prometheus:
+      endpoint: 0.0.0.0:8889
+
+  service:
+    pipelines:
+      logs:
+        receivers: [otlp]
+        processors: [transform/logs, attributes/delete, batch]
+        exporters: [loki]
+        
+      traces:
+        receivers: [otlp]
+        processors: [attributes/delete, batch]
+        exporters: [otlp/tempo]
+        
+      metrics:
+        receivers: [otlp]
+        processors: [batch]
+        exporters: [prometheus]
+
+ports:
+  otlp:
+    enabled: true
+    containerPort: 4317
+    servicePort: 4317
+    protocol: TCP
+  otlp-http:
+    enabled: true
+    containerPort: 4318
+    servicePort: 4318
+    protocol: TCP
+  prometheus:
+    enabled: true
+    containerPort: 8889
+    servicePort: 8889
+    protocol: TCP
+
+service:
+  type: ClusterIP
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi

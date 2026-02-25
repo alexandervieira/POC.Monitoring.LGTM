@@ -4,11 +4,12 @@ Prova de conceito de observabilidade com Stack LGTM (Loki + Grafana + Tempo + Mi
 
 ## 📚 Documentação
 
-- **[Visão Geral](docs/visao_geral.md)** - Comparação Stack LGTM vs Application Insights, custos, LGPD e recomendações
+- **[Visão Geral](docs/visao_geral.md)** - Comparação Stack LGTM vs Application Insights, custos, LGPD e decisões arquiteturais
 - **[Guia de Implantação](docs/implantacao.md)** - Instalação de ferramentas, deploy local, GCP, Azure e Kubernetes
 - **[Backend API](backend/README.md)** - Documentação da API .NET 10 com OpenTelemetry e exemplos de dashboards
 - **[Frontend Dashboard](frontend/monitoring-lgtm/README.md)** - Dashboard React + TypeScript + Vite para visualização
-- **[Terraform Azure](terraform/azure/README.md)** - Infraestrutura como código para Azure com AKS e Managed Grafana
+- **[Terraform Azure](terraform/azure/README.md)** - Infraestrutura como código para Azure com AKS
+- **[Terraform GCP](terraform/gcp/)** - Infraestrutura como código para GCP com GKE
 
 ## 🎯 Visão Geral
 
@@ -17,37 +18,52 @@ Solução open-source de observabilidade que oferece:
 - **Loki**: Agregação de logs com baixo custo
 - **Grafana**: Visualização unificada de métricas, logs e traces
 - **Tempo**: Distributed tracing para análise de performance
-- **Mimir/Prometheus**: Métricas de aplicação e infraestrutura
+- **Prometheus**: Métricas de aplicação e infraestrutura
+- **OpenTelemetry Collector**: Pipeline de telemetria com sanitização LGPD
 
-### Conformidade LGPD
+### Conformidade LGPD (Implementado)
+- ✅ **4 Camadas de Sanitização**: Aplicação → OTel Collector → Storage → Lifecycle
 - ✅ Sanitização automática de CPF, email, telefone, cartão, CNPJ e JWT
 - ✅ Anonimização com SHA256 hash para identificação de usuários
-- ✅ Retenção de 90 dias com limpeza automática
+- ✅ Retenção de 90 dias com limpeza automática (Azure Blob + GCS)
 - ✅ API de exclusão para direito ao esquecimento
 - ✅ Criptografia AES-256 para dados sensíveis
+
+### Decisão Arquitetural: Grafana Self-Hosted
+**✅ Implementado:** Grafana self-hosted no AKS (Azure) e GKE (GCP)
+
+**Justificativa:**
+- 💰 Azure Managed Grafana adiciona $100/mês sem reduzir complexidade
+- 🔒 Controle total sobre LGPD e sanitização
+- 🎯 Toda stack LGTM no mesmo cluster
+- 🔧 Plugins ilimitados e customizações completas
 
 ### Comparação de Custos (100GB/mês)
 | Solução | Custo | Economia |
 |---------|-------|----------|
-| Stack LGTM (GCP) | $240/mês | Baseline |
-| Stack LGTM (Azure) | $343/mês | -43% |
-| Application Insights | $230/mês | +4% |
+| Azure Self-Hosted (Implementado) | $161/mês | Baseline |
+| GCP Self-Hosted (Implementado) | $216/mês | -25% |
+| Azure Managed Grafana | $261/mês | -38% ❌ |
+| Application Insights | $230/mês | -30% |
 
-**Break-even**: Stack LGTM compensa a partir de 200GB/mês (economia de 25-70%)
+**Break-even**: Stack LGTM compensa a partir de 100GB/mês (economia de 30-80%)
 
 ## 🏗️ Arquitetura
 
-### Fluxo de Dados
+### Fluxo de Dados com LGPD
 ```
 ┌─────────────────┐
 │   API .NET 10   │
 │  + OpenTelemetry│
+│  + SensitiveData│  ◄── Camada 1: Sanitização na aplicação
+│    LogProcessor │
 └────────┬────────┘
          │ OTLP
          ▼
 ┌─────────────────┐
 │  OTel Collector │
-│  + Transform    │ ◄── Sanitização LGPD
+│  + Transform    │  ◄── Camada 2: Sanitização no collector
+│  + Attributes   │      (CPF, Email, JWT, Headers)
 └────────┬────────┘
          │
     ┌────┴────┬────────┬──────────┐
@@ -55,20 +71,22 @@ Solução open-source de observabilidade que oferece:
 ┌──────┐ ┌──────┐ ┌────────┐ ┌─────────┐
 │ Loki │ │Tempo │ │Prometheus│ │Grafana │
 │(logs)│ │(trace)│ │(metrics) │ │ (UI)   │
-└──────┘ └──────┘ └────────┘ └─────────┘
+│ 90d  │ │ 90d  │ │  90d     │ │Self-   │  ◄── Camada 3: Retenção
+└───┬──┘ └───┬──┘ └────┬─────┘ │Hosted  │
+    │        │         │        └─────────┘
+    ▼        ▼         ▼
+┌────────────────────────────┐
+│  Azure Blob / GCS          │
+│  Lifecycle: 90 dias        │  ◄── Camada 4: Storage lifecycle
+└────────────────────────────┘
 ```
 
-### Camadas de Sanitização
-1. **Aplicação**: `SensitiveDataLogProcessor` + `IncludeFormattedMessage=false`
-2. **Collector**: Transform processor com regex patterns
-3. **Storage**: Retenção de 90 dias + compactor
-
-### Componentes
+### Componentes Implementados
 - **Backend**: API REST .NET 10 + ASP.NET Core + PostgreSQL
 - **Frontend**: React + TypeScript + Vite (dashboard de monitoramento)
-- **Observabilidade**: OpenTelemetry + Stack LGTM
-- **Infraestrutura**: Docker Compose (local) + Kubernetes (produção)
-- **IaC**: Terraform para GCP e Azure
+- **Observabilidade**: OpenTelemetry + Stack LGTM (self-hosted)
+- **Infraestrutura**: Terraform (Azure + GCP) + Kubernetes (AKS/GKE)
+- **LGPD**: 4 camadas de sanitização + retenção de 90 dias
 
 ## 🛠️ Tecnologias
 
@@ -80,11 +98,11 @@ Solução open-source de observabilidade que oferece:
 - **Entity Framework Core** - ORM
 
 ### Observabilidade
-- **Grafana Loki** - Agregação de logs
-- **Grafana Tempo** - Distributed tracing
-- **Prometheus** - Métricas de aplicação
-- **Grafana** - Visualização e dashboards
-- **OpenTelemetry Collector** - Pipeline de telemetria
+- **OpenTelemetry Collector** - Pipeline com sanitização LGPD
+- **Grafana Loki** - Agregação de logs (90d retention)
+- **Grafana Tempo** - Distributed tracing (90d retention)
+- **Prometheus** - Métricas de aplicação (90d retention)
+- **Grafana** - Visualização (self-hosted no AKS/GKE)
 
 ### Frontend
 - **React 18** - Framework UI
@@ -94,14 +112,14 @@ Solução open-source de observabilidade que oferece:
 
 ### Infraestrutura
 - **Docker** - Containerização
-- **Kubernetes** - Orquestração (GKE/AKS)
-- **Terraform** - Infrastructure as Code
+- **Kubernetes** - Orquestração (AKS/GKE)
+- **Terraform** - Infrastructure as Code (Azure + GCP)
 - **Helm** - Package manager para Kubernetes
 - **k6** - Testes de carga
 
 ### Cloud Providers
-- **Google Cloud Platform** - GKE, Cloud Storage, Cloud SQL
-- **Microsoft Azure** - AKS, Blob Storage, Managed Grafana
+- **Microsoft Azure** - AKS, Blob Storage, PostgreSQL, Container Apps
+- **Google Cloud Platform** - GKE, Cloud Storage, Cloud SQL, Cloud Run
 
 ## 📁 Estrutura de Pastas
 
@@ -158,26 +176,30 @@ POC.Monitoring.LGTM/
 │   └── generate-terraform-docs.sh
 │
 └── terraform/                        # Infrastructure as Code
-    ├── azure/                        # IaC Azure
+    ├── azure/                        # IaC Azure (Implementado)
     │   ├── environments/
     │   │   ├── dev/
     │   │   ├── staging/
     │   │   └── prod/
     │   └── modules/
-    │       ├── aks/
-    │       ├── container-apps/
-    │       ├── postgresql/
-    │       └── monitoring/
-    └── gcp/                          # IaC GCP
+    │       ├── network/              # VNet, Subnets, DNS
+    │       ├── aks/                  # Kubernetes cluster
+    │       ├── storage/              # Blob Storage (90d lifecycle)
+    │       ├── postgresql/           # Flexible Server
+    │       ├── container-apps/       # Backend API
+    │       └── monitoring/           # LGTM + OTel Collector
+    └── gcp/                          # IaC GCP (Implementado)
         ├── environments/
         │   ├── dev/
         │   ├── stage/
         │   └── prod/
         └── modules/
-            ├── gke/
-            ├── cloud-run/
-            ├── cloud-sql/
-            └── monitoring/
+            ├── networking/           # VPC, Subnets
+            ├── gke/                  # Kubernetes cluster
+            ├── cloud-storage/        # GCS buckets (90d lifecycle)
+            ├── cloud-sql/            # PostgreSQL
+            ├── cloud-run/            # Backend API
+            └── monitoring/           # LGTM + OTel Collector
 ```
 
 ## 🚀 Quick Start
@@ -188,6 +210,7 @@ POC.Monitoring.LGTM/
 docker --version        # >= 24.0
 dotnet --version        # >= 10.0
 terraform --version     # >= 1.6
+helm --version          # >= 3.12
 ```
 
 ### 2. Executar Localmente
@@ -223,7 +246,7 @@ curl -X POST http://localhost:5000/lgpd/test \
 # {service_name="apicontagem"} |= "REDACTED"
 ```
 
-### 4. Deploy em Produção
+### 4. Deploy em Produção (Azure)
 ```bash
 # Azure (Terraform)
 cd terraform/azure/environments/dev
@@ -234,8 +257,31 @@ terraform apply
 # Configurar kubectl
 az aks get-credentials --resource-group rg-lgtm-dev --name aks-lgtm-dev
 
-# Deploy da aplicação
-kubectl apply -f ../../k8s/
+# Verificar pods
+kubectl get pods -n monitoring
+
+# Outputs
+terraform output grafana_url
+terraform output otel_collector_endpoint
+```
+
+### 5. Deploy em Produção (GCP)
+```bash
+# GCP (Terraform)
+cd terraform/gcp/environments/dev
+terraform init
+terraform plan
+terraform apply
+
+# Configurar kubectl
+gcloud container clusters get-credentials dev-lgtm-cluster --region us-central1
+
+# Verificar pods
+kubectl get pods -n monitoring
+
+# Outputs
+terraform output grafana_service
+terraform output otel_collector_endpoint
 ```
 
 ## 📊 Dashboards Grafana
@@ -244,25 +290,53 @@ Importe os seguintes dashboards:
 - **[ASP.NET Core Metrics - ID 19924](https://grafana.com/grafana/dashboards/19924)** - Visão geral de requisições
 - **[ASP.NET Core Endpoint - ID 19925](https://grafana.com/grafana/dashboards/19925)** - Telemetria por endpoint
 
-## 🔒 Conformidade LGPD
+## 🔒 Conformidade LGPD (4 Camadas)
+
+### Camada 1: Aplicação (.NET)
+```csharp
+// SensitiveDataLogProcessor + IncludeFormattedMessage=false
+builder.Logging.AddOpenTelemetry(options => {
+    options.IncludeFormattedMessage = false;
+    options.ParseStateValues = false;
+    options.AddProcessor(new SensitiveDataLogProcessor());
+});
+```
+
+### Camada 2: OpenTelemetry Collector
+```yaml
+processors:
+  transform/logs:
+    log_statements:
+      - replace_pattern(body, "\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}", "***CPF-REDACTED***")
+      - replace_all_patterns(attributes, "value", "...", "***REDACTED***")
+  attributes/delete:
+    actions:
+      - key: http.request.header.authorization
+        action: delete
+```
+
+### Camada 3: Retenção (Loki/Tempo/Prometheus)
+- Loki: 90 dias (compactor enabled)
+- Tempo: 90 dias (block_retention: 2160h)
+- Prometheus: 90 dias (retention: 90d)
+
+### Camada 4: Storage Lifecycle
+- Azure Blob Storage: Lifecycle policy (90 dias)
+- Google Cloud Storage: Lifecycle rule (90 dias)
 
 ### Dados Sanitizados
 - CPF: `123.456.789-10` → `***CPF-REDACTED***`
 - Email: `user@email.com` → `***EMAIL-REDACTED***`
 - Telefone: `(11) 98765-4321` → `***PHONE-REDACTED***`
 - Cartão: `4111 1111 1111 1111` → `***CARD-REDACTED***`
+- CNPJ: `12.345.678/0001-90` → `***CNPJ-REDACTED***`
+- JWT: `eyJhbGci...` → `***JWT-REDACTED***`
 
 ### Direito ao Esquecimento
 ```bash
 # Excluir dados de usuário
 curl -X DELETE http://localhost:5000/gdpr/user/123.456.789-10
 ```
-
-### Retenção
-- Logs: 90 dias (Loki)
-- Traces: 90 dias (Tempo)
-- Métricas: 90 dias (Prometheus)
-- Dados: 90 dias (PostgreSQL)
 
 ## 📈 Monitoramento
 
@@ -273,7 +347,7 @@ curl -X DELETE http://localhost:5000/gdpr/user/123.456.789-10
 - Uso de CPU e memória
 - Conexões de banco de dados
 
-### Logs Estruturados
+### Logs Estruturados (Sanitizados)
 ```json
 {
   "timestamp": "2024-01-15T10:30:00Z",
@@ -304,13 +378,13 @@ k6 run load-test.js
 # - < 1% error rate
 ```
 
-## 💰 Estimativa de Custos
+## 💰 Estimativa de Custos (Implementado)
 
-| Volume/mês | GCP LGTM | Azure LGTM | App Insights | Economia |
-|------------|----------|------------|--------------|----------|
-| 100GB | $240 | $343 | $230 | Baseline |
-| 500GB | $450 | $620 | $1,150 | 60% |
-| 1TB | $750 | $1,050 | $2,300 | 70% |
+| Volume/mês | Azure Self-Hosted | GCP Self-Hosted | App Insights | Economia |
+|------------|-------------------|-----------------|--------------|----------|
+| 100GB | $161 | $216 | $230 | 30-43% |
+| 500GB | $280 | $350 | $1,150 | 70-76% |
+| 1TB | $450 | $550 | $2,300 | 75-80% |
 
 ## 🤝 Contribuindo
 
@@ -333,4 +407,4 @@ Este projeto é uma POC (Proof of Concept) para fins educacionais.
 
 ---
 
-**Desenvolvido com ❤️ usando .NET 10 + OpenTelemetry + Stack LGTM**
+**Desenvolvido com ❤️ usando .NET 10 + OpenTelemetry + Stack LGTM + Terraform**

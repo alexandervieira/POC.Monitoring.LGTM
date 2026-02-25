@@ -1,0 +1,20 @@
+tempo:
+  storage:
+    trace:
+      backend: azure
+      azure:
+        storage_account_name: ${storage_account_name}
+        storage_account_key: ${storage_account_key}
+        container_name: ${container_name}
+  
+  retention: 2160h  # 90 dias
+
+  compactor:
+    compaction:
+      block_retention: 2160h
+
+replicas: 2
+
+persistence:
+  enabled: true
+  size: 10Gi

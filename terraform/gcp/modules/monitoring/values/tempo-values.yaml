@@ -1,0 +1,18 @@
+tempo:
+  storage:
+    trace:
+      backend: gcs
+      gcs:
+        bucket_name: ${gcs_bucket_name}
+  
+  retention: 2160h  # 90 dias
+
+  compactor:
+    compaction:
+      block_retention: 2160h
+
+replicas: 2
+
+persistence:
+  enabled: true
+  size: 10Gi

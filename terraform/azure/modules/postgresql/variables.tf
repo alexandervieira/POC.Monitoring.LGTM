@@ -14,14 +14,18 @@ variable "subnet_id" {
   type = string
 }
 
-variable "node_count" {
-  type    = number
-  default = 2
+variable "dns_zone_id" {
+  type = string
 }
 
-variable "vm_size" {
+variable "sku_name" {
   type    = string
-  default = "Standard_D2s_v3"
+  default = "B_Standard_B1ms"
+}
+
+variable "storage_mb" {
+  type    = number
+  default = 32768
 }
 
 variable "tags" {

@@ -1,0 +1,21 @@
+prometheus:
+  prometheusSpec:
+    retention: 90d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 50Gi
+    
+    thanos:
+      objectStorageConfig:
+        name: thanos-objstore-config
+        key: objstore.yml
+
+grafana:
+  enabled: false
+
+alertmanager:
+  enabled: true
