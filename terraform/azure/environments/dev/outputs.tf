@@ -56,3 +56,13 @@ output "tempo_endpoint" {
 output "prometheus_endpoint" {
   value = module.monitoring.prometheus_endpoint
 }
+
+output "frontend_url" {
+  value       = module.static_web_app.url
+  description = "Azure Static Web App URL"
+}
+
+output "frontend_api_key" {
+  value     = module.static_web_app.api_key
+  sensitive = true
+}

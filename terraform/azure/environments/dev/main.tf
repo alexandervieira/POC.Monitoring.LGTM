@@ -129,3 +129,14 @@ module "container_apps" {
   
   depends_on = [module.network, module.postgresql, module.monitoring]
 }
+
+module "static_web_app" {
+  source = "../../modules/static-web-app"
+  
+  environment         = local.environment
+  location            = local.location
+  resource_group_name = azurerm_resource_group.main.name
+  sku_tier            = "Free"
+  sku_size            = "Free"
+  tags                = local.tags
+}

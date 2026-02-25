@@ -82,9 +82,9 @@ Solução open-source de observabilidade que oferece:
 ```
 
 ### Componentes Implementados
-- **Backend**: API REST .NET 10 + ASP.NET Core + PostgreSQL
-- **Frontend**: React + TypeScript + Vite (dashboard de monitoramento)
-- **Observabilidade**: OpenTelemetry + Stack LGTM (self-hosted)
+- **Backend**: API REST .NET 10 + ASP.NET Core + PostgreSQL (Container Apps / Cloud Run)
+- **Frontend**: React + TypeScript + Vite (Azure Static Web App / Firebase Hosting)
+- **Observabilidade**: OpenTelemetry + Stack LGTM (self-hosted no AKS/GKE)
 - **Infraestrutura**: Terraform (Azure + GCP) + Kubernetes (AKS/GKE)
 - **LGPD**: 4 camadas de sanitização + retenção de 90 dias
 
@@ -118,8 +118,8 @@ Solução open-source de observabilidade que oferece:
 - **k6** - Testes de carga
 
 ### Cloud Providers
-- **Microsoft Azure** - AKS, Blob Storage, PostgreSQL, Container Apps
-- **Google Cloud Platform** - GKE, Cloud Storage, Cloud SQL, Cloud Run
+- **Microsoft Azure** - AKS, Blob Storage, PostgreSQL, Container Apps, Static Web App
+- **Google Cloud Platform** - GKE, Cloud Storage, Cloud SQL, Cloud Run, Firebase Hosting
 
 ## 📁 Estrutura de Pastas
 
@@ -187,6 +187,7 @@ POC.Monitoring.LGTM/
     │       ├── storage/              # Blob Storage (90d lifecycle)
     │       ├── postgresql/           # Flexible Server
     │       ├── container-apps/       # Backend API
+    │       ├── static-web-app/       # Frontend React
     │       └── monitoring/           # LGTM + OTel Collector
     └── gcp/                          # IaC GCP (Implementado)
         ├── environments/
@@ -199,6 +200,7 @@ POC.Monitoring.LGTM/
             ├── cloud-storage/        # GCS buckets (90d lifecycle)
             ├── cloud-sql/            # PostgreSQL
             ├── cloud-run/            # Backend API
+            ├── firebase-hosting/     # Frontend React
             └── monitoring/           # LGTM + OTel Collector
 ```
 
@@ -263,6 +265,7 @@ kubectl get pods -n monitoring
 # Outputs
 terraform output grafana_url
 terraform output otel_collector_endpoint
+terraform output frontend_url
 ```
 
 ### 5. Deploy em Produção (GCP)
@@ -385,6 +388,8 @@ k6 run load-test.js
 | 100GB | $161 | $216 | $230 | 30-43% |
 | 500GB | $280 | $350 | $1,150 | 70-76% |
 | 1TB | $450 | $550 | $2,300 | 75-80% |
+
+**Nota:** Custos incluem backend, frontend, observabilidade e storage.
 
 ## 🤝 Contribuindo
 
