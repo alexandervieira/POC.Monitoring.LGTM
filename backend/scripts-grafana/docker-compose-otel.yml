@@ -100,6 +100,7 @@ services:
     volumes:
       - ./BaseContagemPostgreSql.sql:/docker-entrypoint-initdb.d/1-basecontagem.sql
     environment:
+      POSTGRES_DB: basecontagem
       POSTGRES_PASSWORD: "Postgres2025!"
     ports:
       - "5432:5432"
