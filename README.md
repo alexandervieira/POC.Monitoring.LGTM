@@ -4,8 +4,12 @@ Prova de conceito de observabilidade com Stack LGTM (Loki + Grafana + Tempo + Mi
 
 ## 📚 Documentação
 
-- **[Visão Geral](docs/visao_geral.md)** - Comparação Stack LGTM vs Application Insights, custos, LGPD e decisões arquiteturais
+- **[🎯 Matriz de Decisão (Novo)](docs/decision_matrix.md)** - Guia executivo completo para escolher entre AKS, GKE, VMs e Managed Grafana com análise de custo/benefício, checklists e árvore de decisão
+- **[📊 Análise de Custos (Novo)](docs/cost_analysis.md)** - Visualizações comparativas, projeções de TCO, ROI, break-even analysis e simulações por cenário
+- **[🖥️ Referência VMs (Novo)](docs/vm_specs_reference.md)** - Especificações técnicas completas das VMs por ambiente com CPU, RAM, IOPS, comandos de provisioning e distribuição Docker Stack
+- **[Visão Geral](docs/visao_geral.md)** - Comparação Stack LGTM vs Application Insights, custos detalhados (AKS, GKE, VMs, Managed Grafana), LGPD e decisões arquiteturais
 - **[Guia de Implantação](docs/implantacao.md)** - Instalação de ferramentas, deploy local, GCP, Azure e Kubernetes
+- **[🚀 Deploy em VMs (Novo)](docs/deployment_vms.md)** - Guia completo para deploy em Azure VMs e GCP Compute Engine usando Docker Compose (melhor custo/benefício para Dev/Stage)
 - **[Backend API](backend/README.md)** - Documentação da API .NET 10 com OpenTelemetry e exemplos de dashboards
 - **[Frontend Dashboard](frontend/monitoring-lgtm/README.md)** - Dashboard React + TypeScript + Vite para visualização
 - **[Terraform Azure](terraform/azure/README.md)** - Infraestrutura como código para Azure com AKS
@@ -20,6 +24,75 @@ Solução open-source de observabilidade que oferece:
 - **Tempo**: Distributed tracing para análise de performance
 - **Prometheus**: Métricas de aplicação e infraestrutura
 - **OpenTelemetry Collector**: Pipeline de telemetria com sanitização LGPD
+
+### Opções de Deployment - Guia Rápido
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│              🎯 ESCOLHA POR AMBIENTE                         │
+└─────────────────────────────────────────────────────────────┘
+
+💰 DESENVOLVIMENTO (< 50GB/mês)
+├─ Azure VM B2s: $90/mês ⭐ MELHOR CUSTO
+│  ✅ CPU burst para picos ocasionais
+│  ✅ Setup simples (Docker Compose)
+│  ✅ 61% economia vs App Insights
+│  📦 2 vCPUs, 4GB RAM, 100GB SSD
+│  ⚡ Intel Xeon Platinum 8370C (2.8 GHz)
+│  💾 IOPS: 2,300 (burst 5,000)
+│  📚 docs/deployment_vms.md
+│
+└─ GCP VM Preemptible: $106/mês
+   ✅ 54% economia (aceita interrupções)
+   📦 2 vCPUs, 8GB RAM, 100GB SSD
+   ⚠️ VM pode ser desligada pelo GCP
+
+🧪 STAGING (50-150GB/mês)
+├─ Azure VM D2s_v3: $139/mês ⭐ MELHOR CUSTO
+│  ✅ Performance consistente
+│  ✅ Espelho de produção
+│  ✅ 54% economia vs App Insights
+│  📦 2 vCPUs, 8GB RAM, 120GB Premium SSD
+│  ⚡ Intel Xeon E5-2673 v4 (2.3-3.5 GHz)
+│  💾 IOPS: 3,500 (consistente)
+│  📚 docs/deployment_vms.md
+│
+└─ GCP VM n1-standard-2: $160/mês
+   ✅ 47% economia
+   ✅ Multi-cloud
+   📦 2 vCPUs, 7.5GB RAM, 120GB SSD
+   ⚡ Intel Xeon (Skylake/Broadwell)
+
+🚀 PRODUÇÃO (> 150GB)
+├─ Azure AKS: $161/mês ⭐ RECOMENDADO
+│  ✅ HA nativa (99.9% SLA)
+│  ✅ Auto-scaling (HPA)
+│  ✅ 59% economia vs App Insights ($391)
+│  ✅ 70% mais barato que VMs HA ($538)
+│  📖 terraform/azure/
+│
+└─ GCP GKE: $216/mês
+   ✅ Multi-cloud
+   ✅ GKE Autopilot disponível
+   📖 terraform/gcp/
+
+📈 HIGH SCALE (> 500GB) - Única Opção Viável
+├─ Azure AKS: $280-450/mês
+│  ✅ 76-80% economia vs App Insights
+│  ✅ VMs não escalam adequadamente
+│
+└─ GCP GKE: $350-550/mês
+   ✅ Multi-cloud + GKE Autopilot
+
+❌ EVITAR
+├─ VMs para Produção: $538-582/mês
+│  ❌ 234-269% mais caro que Kubernetes
+│  ❌ Sem auto-scaling
+│
+└─ Azure Managed Grafana: $261/mês
+   ❌ +62% custo sem reduzir complexidade
+   ❌ Ainda requer gerenciar AKS completo
+```
 
 ### Conformidade LGPD (Implementado)
 - ✅ **4 Camadas de Sanitização**: Aplicação → OTel Collector → Storage → Lifecycle
@@ -38,15 +111,36 @@ Solução open-source de observabilidade que oferece:
 - 🎯 Toda stack LGTM no mesmo cluster
 - 🔧 Plugins ilimitados e customizações completas
 
-### Comparação de Custos (100GB/mês)
-| Solução | Custo | Economia |
-|---------|-------|----------|
-| Azure Self-Hosted (Implementado) | $161/mês | Baseline |
-| GCP Self-Hosted (Implementado) | $216/mês | -25% |
-| Azure Managed Grafana | $261/mês | -38% ❌ |
-| Application Insights | $230/mês | -30% |
+### Comparação de Custos por Ambiente
 
-**Break-even**: Stack LGTM compensa a partir de 100GB/mês (economia de 30-80%)
+| Ambiente | Azure (Recomendado) | GCP | App Insights | Economia |
+|----------|---------------------|-----|--------------|----------|
+| **Dev** (< 50GB) | **VM B2s: $90** ⭐ | VM Preemptible: $106 | $230 | **61%** |
+| **Stage** (50-150GB) | **VM D2s_v3: $139** ⭐ | VM n1-std-2: $160 | $299 | **54%** |
+| **Prod** (150-200GB) | **AKS: $161** ⭐ | GKE: $216 | $391 | **59%** |
+| **Prod High** (500GB) | **AKS: $280** ⭐ | GKE: $350 | $1,150 | **76%** |
+| **Prod Scale** (1TB) | **AKS: $450** ⭐ | GKE: $550 | $2,300 | **80%** |
+
+**💰 Economia Adicional com Reserved Instances (RI):**
+
+| Modelo | Dev+Stage (3 Anos) | Economia vs PAYG | Economia vs App Insights |
+|--------|---------------------|------------------|--------------------------|
+| **Pay-As-You-Go** | $8,244 | Baseline | 57% |
+| **Azure 3 Year RI** ⭐ | **$6,084** | **26% ↓** | **68%** |
+| **Azure Stage Spot** | **$6,228** | **24% ↓** | **67%** |
+| **GCP Preemptible** | **$8,316** | **22% ↓** | **58%** |
+| App Insights | $19,044 | - | Baseline |
+
+**ℹ️ Detalhes:** [docs/visao_geral.md - Seção 5.8](docs/visao_geral.md#58-reserved-instances-e-spot-vms---economia-adicional)
+
+**Break-even**: Stack LGTM compensa a partir de 50GB/mês (economia de 47-80%)
+
+**Recomendações por Ambiente:**
+- **💰 Dev (< 50GB)**: Azure VM B2s ($90) - Melhor custo absoluto
+- **🧪 Stage (50-150GB)**: Azure VM D2s_v3 ($139) - Espelho produção
+- **🚀 Prod (> 150GB)**: Azure AKS ($161) - HA nativa + auto-scaling
+- **📈 High Scale (> 500GB)**: AKS única opção viável (VMs não escalam)
+- **💡 Economia Máxima**: Use Spot/Preemptible para Dev/Stage (até 85% desconto)
 
 ## 🏗️ Arquitetura
 
@@ -381,15 +475,53 @@ k6 run load-test.js
 # - < 1% error rate
 ```
 
-## 💰 Estimativa de Custos (Implementado)
+## 💰 Estimativa de Custos por Ambiente
 
-| Volume/mês | Azure Self-Hosted | GCP Self-Hosted | App Insights | Economia |
-|------------|-------------------|-----------------|--------------|----------|
-| 100GB | $161 | $216 | $230 | 30-43% |
-| 500GB | $280 | $350 | $1,150 | 70-76% |
-| 1TB | $450 | $550 | $2,300 | 75-80% |
+### Custo Mensal por Ambiente
 
-**Nota:** Custos incluem backend, frontend, observabilidade e storage.
+| Ambiente | Volume | Azure ⭐ | GCP | App Insights | Economia vs App Insights |
+|----------|--------|----------|-----|--------------|-------------------------|
+| **Dev** | < 50GB | **$90** (VM B2s) | $106 (VM Preempt) | $230 | **61%** ⭐⭐⭐⭐⭐ |
+| **Stage** | 50-150GB | **$139** (VM D2s_v3) | $160 (VM n1-std-2) | $299 | **54%** ⭐⭐⭐⭐⭐ |
+| **Prod** | 150-200GB | **$161** (AKS) | $216 (GKE) | $391 | **59%** ⭐⭐⭐⭐⭐ |
+| **Prod** | 500GB | **$280** (AKS) | $350 (GKE) | $1,150 | **76%** ⭐⭐⭐⭐⭐ |
+| **Prod** | 1TB | **$450** (AKS) | $550 (GKE) | $2,300 | **80%** ⭐⭐⭐⭐⭐ |
+
+### Custo Total (Dev + Stage + Prod)
+
+**Setup completo de 3 ambientes:**
+
+| Componente | Solução | Custo/mês | Custo Anual |
+|------------|---------|-----------|-------------|
+| **Dev** (50GB) | Azure VM B2s | $90 | $1,080 |
+| **Stage** (100GB) | Azure VM D2s_v3 | $139 | $1,668 |
+| **Prod** (200GB) | Azure AKS | $161 | $1,932 |
+| **Total LGTM** | | **$390/mês** | **$4,680/ano** |
+| | | |
+| **Comparação:** | | |
+| Dev + Stage + Prod (App Insights) | | $920/mês | $11,040/ano |
+| **Economia LGTM** | | **$530/mês** | **$6,360/ano** |
+| **ROI** | | **58%** | |
+
+### Recomendações por Cenário
+
+**Cenário 1: Startup (orçamento limitado)**
+- ✅ Dev: Azure VM B2s ($90)
+- ✅ Prod: Azure AKS ($161)
+- ❌ Skip Stage temporariamente
+- **Total: $251/mês** (economia de 60% vs App Insights)
+
+**Cenário 2: Empresa consolidada**
+- ✅ Dev: Azure VM B2s ($90)
+- ✅ Stage: Azure VM D2s_v3 ($139)
+- ✅ Prod: Azure AKS ($161-280)
+- **Total: $390-510/mês** (economia de 55-65%)
+
+**Cenário 3: Enterprise (multi-cloud)**
+- ✅ Dev: Azure VM B2s ($90)
+- ✅ Stage: GCP VM n1-std-2 ($160)
+- ✅ Prod: Azure AKS + GCP GKE ($161 + $216)
+- **Total: $627/mês** (multi-cloud, economia de 40%)
 
 ## 🤝 Contribuindo
 

@@ -1,0 +1,600 @@
+# Análise Comparativa de Custos - Stack LGTM
+
+## 📊 Visualizações de Custo por Cenário
+
+### 1. Custo Mensal por Volume (100GB, 500GB, 1TB)
+
+```
+CUSTO MENSAL ($)
+2500│                                                    App Insights (1TB)
+    │                                                    ████████████████████
+2300│                                                    █                  █
+    │                                                    █                  █
+2000│                                                    █                  █
+    │                                                    █                  █
+1500│                         App Insights (500GB)      █                  █
+    │                         ██████████████████        █                  █
+1150│                         █                █        █                  █
+    │                         █                █        █                  █
+1000│                         █                █        █                  █
+    │                         █                █        █                  █
+ 650│    Managed Grafana      █                █        █                  █
+    │    (1TB) ████████       █                █        █                  █
+ 550│    GKE    █       █     █                █        █                  █
+    │    (1TB) ██       █     █                █        █                  █
+ 450│    AKS ⭐ █ █     █     █                █        █                  █
+    │    (1TB) █ █ █   █     █                █        █                  █
+ 380│    Mng   █ █ █   █     █                █        █                  █
+    │    Graf  █ █ █ █ █     █                █        █                  █
+ 350│    (500) █ █ █ █ █     █                █        █                  █
+    │    GKE   █ █ █ █ █ ████                 █        █                  █
+ 280│    (500) █ █ █ █ █ █  ⭐                █        █                  █
+    │    AKS ⭐ █ █ █ █ █ █  █                 █        █                  █
+ 261│    Mng   █ █ █ █ █ █  █       ████████  █        █                  █
+    │    Graf  █ █ █ █ █ █  █       █      █  █        █                  █
+ 230│    App   █ █ █ █ █ █  █       █      █ ██        █                  █
+    │    Ins   █ █ █ █ █ █  █       █      █ ██        █                  █
+ 216│    GKE   █ █ █ █ █ █  █   ████       █ ██        █                  █
+    │    (100) █ █ █ █ █ █  █   █  █       █ ██        █                  █
+ 180│    VM    █ █ █ █ █ █  █   █  █  █████ ██        █                  █
+    │    (500) █ █ █ █ █ █  █   █  █  █   █ ██        █                  █
+ 161│    AKS ⭐ █ █ █ █ █ █ ████  █  █   █ ██        █                  █
+    │    (100) █ █ █ █ █ █ █  █  █  █   █ ██        █                  █
+ 120│    VM    █ █ █ █ █ █ █  █ ██  █   █ ██        █                  █
+    │    GCP   █ █ █ █ █ █ █  █ ██  █   █ ██        █                  █
+ 105│    VM ⭐  █ █ █ █ █ █ █  █ ██ ██   █ ██        █                  █
+    │    Azure █ █ █ █ █ █ █  █ ██ ██ ███ ██        █                  █
+   0└────┴─┴─┴─┴─┴─┴─┴──┴─██─██─███─██────────█──────────────────────█
+         │ │ │ │ │ │ │  │ ││ ││ │││ ││        │                      │
+         V V V V V V V  V VV VV VVV VV        V                      V
+         M M A G A G M  A M G A M A G         M                      A
+         azure gke ks ke ks ke ng  ks azure   ng                     pp
+         VM  VM  1 1 5 5 Graf 1   VM    ns   Graf                    Ins
+                 0 0 0 0 1 0 0     5 1        5                      1TB
+                 0 0 0 0 0 0 0     0 0        0
+         
+         ⭐ = Recomendado por cenário
+```
+
+### 2. Economia vs Application Insights
+
+```
+ECONOMIA PERCENTUAL vs Application Insights
+100%│
+    │
+ 86%│ ⭐⭐⭐⭐⭐ Azure VM (1TB)
+ 84%│ ⭐⭐⭐⭐⭐ Azure VM (500GB)
+ 83%│ ⭐⭐⭐⭐⭐ GCP VM (1TB)
+ 82%│ ⭐⭐⭐⭐⭐ GCP VM (500GB)
+ 80%│ ⭐⭐⭐⭐⭐ Azure AKS (1TB)
+    │         █████████████████████████████████████
+ 76%│ ⭐⭐⭐⭐⭐ Azure AKS (500GB)
+    │         █████████████████████████████████
+    │         █████████████████████████████████
+ 70%│         █████████████████████████████████
+    │         ███████████████████████████
+    │         ███████████████████████████
+ 54%│ ⭐⭐⭐⭐⭐ Azure VM (100GB)
+    │         ████████████████████
+    │         ████████████████████
+ 48%│         ████████████████████
+    │         ████████████████
+    │         ████████████████
+ 30%│         ████████████████
+    │         ████████████
+    │         ████████████
+    │         ████████████
+  0%│─────────────────────────────────────────────
+    │ 100GB           500GB               1TB
+    │
+    │ Quanto maior o volume, MAIOR a economia!
+```
+
+### 3. Custo Total 3 Anos (Projeção)
+
+```
+CUSTO TOTAL 3 ANOS (USD)
+90000│                                                       App Insights (1TB)
+     │                                                       ██████████████████
+82800│                                                       █                █
+     │                                                       █     $82,800    █
+70000│                                                       █                █
+     │                  App Insights (500GB)                █                █
+     │                  ████████████████                    █                █
+41400│                  █              █                    █                █
+     │                  █   $41,400    █                    █                █
+30000│                  █              █                    █                █
+     │  Managed         █              █                    █                █
+23400│  Grafana ████    █              █                    █                █
+     │  (1TB)   █  █    █              █                    █                █
+20000│  GKE     █  █    █              █                    █                █
+     │  (1TB)   █  █    █              █                    █                █
+19800│  ████    █  █    █              █                    █                █
+     │  █  █    █  █    █              █                    █                █
+16200│  █  ⭐   █  █    █              █                    █                █
+     │  █  AKS  █  █    █              █                    █                █
+     │  █  (1TB)█  █    █              █                    █                █
+13680│  █  ████ █  █    █              █                    █                █
+     │  █  █  █ █  █    █              █                    █                █
+12600│  █  █ ███ █  █   █              █                    █                █
+     │  █  █ █ █ █  █   █              █                    █                █
+10080│  █  █ █ ⭐ █  █  █              █                    █                █
+     │  █  █ █ AKS █  █ █              █                    █                █
+ 9396│  █ ██ █ (500) █ █               █                    █                █
+     │  █ ██ █ ████  █ █               █                    █                █
+ 8280│  █ ██ █ █  █ ██ █     ████████  █                    █                █
+     │  █ ██ █ █  █ ██ █     █      █  █                    █                █
+ 7776│  █ ██ █ █  █ ██ █  ████      █  █                    █                █
+     │  █ ██ █ █  █ ██ █  █  █      █  █                    █                █
+ 6480│  █ ██ █ █  █ ██ █  █  █  █████  █                    █                █
+     │  █ ██ █ █  █ ██ █  █  █  █   █  █                    █                █
+ 5796│  █ ██ █ █  █ ██ ████  █  █   █  █                    █                █
+     │  █ ██ █ █  █ ██ █  █  █  █   █  █                    █                █
+ 3780│  ███ █ █ ██ ██ █  █  █  █   █  █                    █                █
+     │  █ █ █ █ ██ ██ █  █  █  █   █  █                    █                █
+    0└──█─█─█─█─██─██─█──█──█──█───█──█────────────────────█────────────────
+       │ │ │ │ ││ ││ │  │  │  │   │  │                    │
+       V V V V VV VV V  V  V  V   V  V                    V
+       A G M G A  A  M  A  G  A   M  A                    A
+       z c p c z  z  g  z  c  z   g  p                    p
+       VM VM rf KE KS KS raf KS KE KS raf                p Ins
+                1T 1T 5  5  1  5  5  1  5                 1TB
+                         0  0  0  0  0  0
+                         0  0  0  0  0  0
+
+       💰 Economia de $66,600 em 3 anos (AKS vs App Insights, 1TB)
+```
+
+### 4. Break-Even Point (Quando LGTM compensa)
+
+```
+CUSTO MENSAL ($)
+ 500│                                          Application Insights
+    │                                         ╱
+    │                                       ╱
+    │                                     ╱
+ 400│                                   ╱
+    │                                 ╱
+    │                               ╱  ← Break-even: 100GB/mês
+ 300│                             ╱
+    │                           ╱   App Insights: $230
+    │                      ╱╱╱╱     ↑
+ 200│                  ╱╱╱╱          │
+    │              ╱╱╱╱              │ LGTM mais barato
+    │          ╱╱╱╱   ← Azure AKS $161
+ 100│    ╱╱╱╱╱╱         
+    │╱╱╱╱╱               Azure AKS
+    │
+   0└────┬────┬────┬────┬────┬────┬────┬────
+        0   50  100  150  200  250  300  350 GB/mês
+            │    │
+            │    └─ Economia de 30% (AKS)
+            └────── Economia de 54% (VM)
+
+Conclusão:
+• Volume < 50GB  → Application Insights ou VM (empate)
+• Volume = 100GB → LGTM economiza 30-54%
+• Volume > 200GB → LGTM economiza 70-86%
+```
+
+---
+
+## 📈 Análise de Tendências
+
+### 5. Crescimento de Volume: Quando Migrar?
+
+```
+CENÁRIO: Startup crescendo de 10GB → 1TB em 2 anos
+
+ANO 1 (10-100GB/mês)
+├─ Mês 1-3:   10GB  → Application Insights ($23/mês)  ✅ Simplicidade
+├─ Mês 4-6:   30GB  → Application Insights ($69/mês)  ✅ OK
+├─ Mês 7-9:   60GB  → App Insights ($138/mês)         ⚠️ Considerar VM
+└─ Mês 10-12: 100GB → Migrar para Azure AKS ($161/mês) ✅ Break-even
+
+ANO 2 (100GB → 1TB)
+├─ Mês 13-18: 200-500GB → Azure AKS ($280/mês)  vs App Insights ($1,150)
+│                         💰 Economia: $870/mês (76%)
+│
+└─ Mês 19-24: 1TB → Azure AKS ($450/mês) vs App Insights ($2,300/mês)
+                    💰 Economia: $1,850/mês (80%)
+
+CUSTO TOTAL 2 ANOS:
+• Estratégia Recomendada (App Insights → AKS):
+  - Ano 1: $23+$69+$138+($161×3) = $713
+  - Ano 2: ($280×6) + ($450×6) = $4,380
+  - TOTAL: $5,093
+
+• Se ficasse só em App Insights:
+  - Ano 1: $23+$69+$138+($230×3) = $920
+  - Ano 2: ($1,150×6) + ($2,300×6) = $20,700
+  - TOTAL: $21,620
+
+💰 ECONOMIA: $21,620 - $5,093 = $16,527 (76%)
+```
+
+### 6. TCO (Total Cost of Ownership) 5 Anos
+
+Assumindo crescimento de 100GB → 2TB ao longo de 5 anos:
+
+```
+CUSTO ACUMULADO (USD)
+120000│                                 Application Insights
+      │                                ╱
+      │                              ╱
+100000│                            ╱  $115,000
+      │                          ╱
+      │                        ╱
+ 80000│                      ╱
+      │                    ╱
+      │                  ╱
+ 60000│                ╱
+      │              ╱
+      │            ╱
+ 40000│          ╱    Azure AKS
+      │        ╱    ╱
+      │      ╱    ╱  $27,000
+ 20000│    ╱    ╱
+      │  ╱    ╱
+      │╱    ╱
+     0└────────────────────────────────────
+       0    1    2    3    4    5  Anos
+      
+      ROI: $88,000 economizados em 5 anos (76%)
+      Break-even: 4 meses
+```
+
+---
+
+## � Análise de Reserved Instances e Spot VMs
+
+### 7. Economia com Modelos de Compra
+
+**Reserved Instances (RI)** e **Committed Use Discounts (CUD)** são contratos de fidelidade que oferecem descontos significativos:
+
+#### Comparativo de Modelos
+
+```
+DESCONTO vs PAY-AS-YOU-GO
+
+100%│ Pay-As-You-Go (Baseline)
+    │ ████████████████████████████████████████
+ 60%│ 1 Year RI/CUD (~40% desconto)
+    │ ████████████████████████
+ 40%│ 3 Year RI/CUD (~60% desconto)
+    │ ████████████████
+ 20%│ Spot/Preemptible (~80% desconto)
+    │ ████████
+  0%└─────────────────────────────────────────
+       Custo relativo
+       
+     ↑ Custo Alto         ↑ Flexibilidade Alta
+     ↓ Custo Baixo        ↓ Flexibilidade Baixa
+```
+
+#### Tabela de Modelos
+
+| Modelo | Custo | Desconto | Flexibilidade | Risco | Quando Usar |
+|--------|-------|----------|---------------|-------|-------------|
+| **Pay-As-You-Go** | 100% | 0% | ✅✅✅✅✅ Total | ✅ Zero | MVP, teste, workloads variáveis |
+| **Reserva 1 Ano** | ~60% | 40% | ⚠️⚠️⚠️ Média | ⚠️ Baixo | Produção estável (1 ano) |
+| **Reserva 3 Anos** | ~35% | 65% | ❌❌ Baixa | ⚠️ Médio | Infraestrutura consolidada |
+| **Spot/Preemptible** | ~15% | 85% | ❌ Nula | ❌ Alto | Dev/Stage (downtime OK) |
+
+### 8. Custos Comparativos: PAYG vs RI vs Spot
+
+#### Azure VMs (Dev + Stage)
+
+```
+CUSTO MENSAL ($)
+
+300│
+   │ Pay-As-You-Go
+   │ ███████████
+250│ ██         ██  $229/mês
+   │ ██         ██
+   │ ██         ██
+200│ ██         ██
+   │ ██  1Y RI  ██
+   │ ██  █████  ██
+150│ ██  ██  █  ██  $189/mês
+   │ ██  ██  █  ██
+   │ ██  ██  █  ██
+100│ ██  ██  █  ██  3Y RI     Stage Spot
+   │ ██  ██  █  ██  ████      ████
+ 50│ ██  ██  █  ██  ██ ██     ██ ██
+   │ ██  ██  █  ██  ██ ██     ██ ██
+  0└─██──██──█──██──██─██─────██─██────
+    PAYG 1Y  3Y Stage 3Y     Spot
+              RI   RI  $169   $173
+
+Economia 3 Anos:
+• 3Y RI: $2,160 (26%)
+• Stage Spot: $2,016 (24%)
+```
+
+#### GCP VMs (Dev + Stage)
+
+```
+CUSTO MENSAL ($)
+
+300│
+   │ Pay-As-You-Go
+   │ ███████████████
+   │ ██           ██  $266/mês
+250│ ██           ██
+   │ ██           ██
+   │ ██  1Y CUD   ██
+200│ ██  ███████  ██
+   │ ██  ██    █  ██  $234/mês
+   │ ██  ██    █  ██
+150│ ██  ██ 3Y █  ██  Preemptible
+   │ ██  ██ CUD█  ██  ████████
+   │ ██  ██ ████  ██  ██    ██
+100│ ██  ██ ████  ██  ██    ██  $231/mês
+   │ ██  ██ ████  ██  ██    ██
+ 50│ ██  ██ ████  ██  ██    ██
+   │ ██  ██ ████  ██  ██    ██
+  0└─██──██─████──██──██────██────
+    PAYG 1Y  3Y   CUD Preemptible
+         CUD CUD      $231
+
+Economia 3 Anos:
+• 3Y CUD: $1,872 (18%)
+• Preemptible: $2,340 (22%)
+```
+
+### 9. TCO 3 Anos: Comparativo Completo
+
+```
+CUSTO TOTAL 3 ANOS (USD)
+
+20000│                        Application Insights
+     │                        ████████████████████
+19044│                        █                  █
+     │                        █   App Insights  █
+     │                        █     $19,044     █
+15000│                        █                  █
+     │  GCP                   █                  █
+     │  PAYG █████████████    █                  █
+10656│  ████ ██          ██   █                  █
+     │  ██ █ ██   GCP    ██   █                  █
+     │  ██ █ ██   3Y     ██   █                  █
+ 8784│  ██ █ ██   CUD    ██   █                  █  
+     │  ██ █ ██  ████    ██   █                  █
+     │  ██ █ ██  ██ ██GCP██   █                  █
+ 8316│  ██ █ ██  ██ ██Pre██   █                  █
+     │  ██ █ ██  ██ ████ ██   █                  █
+     │  ██ █ ██  ██ ████ ██   █                  █Azure
+ 8244│  ██ █ ██  ██ ████ ██ ████████            █
+     │  ██ █ ██  ██ ████ ██ ██ Azure█           █
+     │  ██ █ ██  ██ ████ ██ ██ PAYG █           █
+ 6228│  ██ █ ██  ██ ████ ██ ██ ████ █Stage      █
+     │  ██ █ ██  ██ ████ ██ ██ ████ █Spot       █
+     │  ██ █ ██  ██ ████ ██ ██ ████ ████        █
+ 6084│  ██ █ ██  ██ ████ ██ ██ ████ ████Azure   █
+     │  ██ █ ██  ██ ████ ██ ██ ████ ████3Y ⭐   █
+     │  ██ █ ██  ██ ████ ██ ██ ████ ████RI      █
+    0└──██─█─██──██─████─██─██─████─████████────█
+       GCP GCP GCP GCP Pre Az Az  Az  Az St App
+       PAYG1Y 3Y  3Y  empt PAYG1Y  3Y  Stg Ins
+           CUD CUD CUD ible    RI  RI  Spot
+
+💰 RANKING 3 ANOS:
+1. Azure 3Y RI: $6,084 ⭐ (-$12,960 vs App Insights = 68%)
+2. Azure Stage Spot: $6,228 (-$12,816 vs App Insights = 67%)
+3. Azure PAYG: $8,244 (-$10,800 vs App Insights = 57%)
+4. GCP Preemptible: $8,316 (-$10,728 vs App Insights = 56%)
+5. GCP 3Y CUD: $8,784 (-$10,260 vs App Insights = 54%)
+6. GCP PAYG: $10,656 (-$8,388 vs App Insights = 44%)
+```
+
+### 10. Quando Vale a Pena Reserved Instances?
+
+#### Decision Tree
+
+```
+DECISÃO: Qual modelo escolher?
+
+┌─────────────────────────────────────┐
+│ Quanto tempo vai usar a infra?      │
+└──────────────┬──────────────────────┘
+               │
+       ┌───────┴────────┐
+       │                │
+     < 6 meses       > 6 meses
+       │                │
+       ▼                ▼
+   Pay-As-You-Go   ┌─────────────────┐
+   (Flexibilidade) │ Workload estável?│
+                   └────────┬─────────┘
+                            │
+                    ┌───────┴────────┐
+                    │                │
+                  Sim              Não
+                    │                │
+                    ▼                ▼
+            ┌─────────────┐   Pay-As-You-Go
+            │ Quanto tempo?│   (Variável)
+            └──────┬───────┘
+                   │
+          ┌────────┴─────────┐
+          │                  │
+       1-2 anos          3+ anos
+          │                  │
+          ▼                  ▼
+      1 Year RI          3 Year RI
+      (40% ↓)            (65% ↓) ⭐
+
+┌─────────────────────────────────────┐
+│ É Dev/Stage E aceita downtime?      │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+            Sim → Spot/Preemptible (85% ↓) ⭐⭐⭐
+            Não → Siga árvore acima
+```
+
+#### Recomendações por Perfil
+
+| Perfil | Recomendação | Economia | Justificativa |
+|--------|--------------|----------|---------------|
+| **Startup MVP** | Pay-As-You-Go | 0% | Máxima flexibilidade |
+| **Produto validado (1 ano)** | 1 Year RI | 40% | Compromisso aceitável |
+| **Empresa consolidada (3+ anos)** | 3 Year RI | 65% | Melhor custo |
+| **Dev com downtime OK** | **Spot** ⭐ | **85%** | Economia máxima |
+| **Stage não-crítico** | **Spot** ⭐ | **85%** | Redundância via CI/CD |
+
+---
+
+## �💡 Simulações por Cenário
+
+### Cenário A: E-commerce Médio (Produção)
+
+**Perfil:**
+- Tráfego: 100k req/dia
+- Logs: 300GB/mês
+- Traces: 150GB/mês
+- Métricas: 50GB/mês
+- **Total: 500GB/mês**
+
+**Opções:**
+
+| Opção | Setup | Custo Mensal | Custo Anual | 3 Anos | Manutenção |
+|-------|-------|--------------|-------------|---------|-----------|
+| App Insights | 15min | $1,150 | $13,800 | $41,400 | 0h/semana |
+| Azure AKS ⭐ | 1 dia | $280 | $3,360 | $10,080 | 2h/semana |
+| GCP GKE | 1 dia | $350 | $4,200 | $12,600 | 2h/semana |
+
+**Recomendação:** Azure AKS
+- Economia: $31,320 em 3 anos (76%)
+- ROI: < 3 meses
+- Time to market: 1 dia
+
+---
+
+### Cenário B: Fintech (LGPD Crítico)
+
+**Perfil:**
+- Tráfego: 500k req/dia
+- Logs: 600GB/mês (com dados sensíveis: CPF, cartão, transações)
+- Traces: 300GB/mês
+- Métricas: 100GB/mês
+- **Total: 1TB/mês**
+
+**Requisitos:**
+- ✅ Sanitização de CPF, cartão, email (4 camadas)
+- ✅ Retenção de 90 dias (auditoria BACEN)
+- ✅ Data residency (Brasil)
+- ✅ API de exclusão (direito ao esquecimento)
+
+**Opções viáveis:**
+
+| Opção | LGPD | Custo Mensal | 3 Anos |
+|-------|------|--------------|---------|
+| Azure AKS ⭐ | ✅ Total (4 camadas) | $450 | $16,200 |
+| GCP GKE | ✅ Total (4 camadas) | $550 | $19,800 |
+| App Insights | ⚠️ Parcial (1 camada) | $2,300 | $82,800 |
+
+**Recomendação:** Azure AKS
+- Única opção com LGPD completo
+- Economia: $66,600 em 3 anos (80%)
+- Risco regulatório mitigado
+
+---
+
+### Cenário C: Startup MVP (Dev/Stage)
+
+**Perfil:**
+- Tráfego: 10k req/dia
+- Logs: 60GB/mês
+- Traces: 30GB/mês
+- Métricas: 10GB/mês
+- **Total: 100GB/mês**
+
+**Requisitos:**
+- Budget < $150/mês
+- Time to market < 1 dia
+- Downtime aceitável (Dev)
+
+**Opções:**
+
+| Opção | Setup | Custo | Downtime | LGPD |
+|-------|-------|-------|----------|------|
+| Azure VM ⭐ | 2h | **$105/mês** | 1-2h/mês OK | ✅ |
+| Azure AKS | 1 dia | $161/mês | < 1min/mês | ✅ |
+| App Insights | 15min | $230/mês | Zero | ⚠️ |
+
+**Recomendação:** Azure VM
+- Melhor custo/benefício para Dev
+- Setup rápido (< 2h)
+- Migração fácil para AKS quando crescer
+
+---
+
+## 🎯 Conclusões
+
+### Resumo Executivo
+
+1. **< 50GB/mês**: Empate entre Application Insights e Azure VM
+   - App Insights se simplicidade > custo
+   - Azure VM se LGPD > simplicidade
+
+2. **100-200GB/mês**: Azure AKS vence
+   - 30-54% economia vs App Insights
+   - Produção-ready desde o início
+   - ROI em < 6 meses
+
+3. **> 500GB/mês**: Azure AKS é obrigatório
+   - 70-86% economia vs App Insights
+   - VMs não escalam adequadamente
+   - Única opção viável
+
+4. **LGPD Crítico**: Sempre AKS/GKE/VM
+   - Application Insights tem limitações
+   - 4 camadas de sanitização vs 1
+
+### ROI Típicos
+
+| Volume | Economia Anual | Break-even | ROI 3 anos |
+|--------|----------------|-----------|------------|
+| 100GB | $828 | 6 meses | $2,484 (30%) |
+| 500GB | $10,440 | 3 meses | $31,320 (76%) |
+| 1TB | $22,200 | 2 meses | $66,600 (80%) |
+
+### Recomendação Final
+
+```
+SE volume > 100GB/mês
+   E (produção OU LGPD crítico)
+ENTÃO
+   USE Azure AKS ($161-450/mês)
+   ECONOMIA: 30-86% vs Application Insights
+   ROI: 2-6 meses
+SENÃO SE volume < 200GB/mês E ambiente = Dev/Stage
+ENTÃO
+   USE Azure VM ($105/mês)
+   ECONOMIA: 54-84% vs Application Insights
+SENÃO
+   CONSIDERE Application Insights
+   (simplicidade > custo)
+FIM
+```
+
+---
+
+**Próximos passos:**
+1. Validar volume estimado de telemetria
+2. Confirmar requisitos de LGPD/compliance
+3. Avaliar expertise da equipe (Kubernetes vs Docker)
+4. Escolher opção usando [docs/decision_matrix.md](decision_matrix.md)
+5. Seguir guia de deploy correspondente
+
+---
+
+**Documentação relacionada:**
+- [📊 Matriz de Decisão](decision_matrix.md)
+- [📖 Visão Geral](visao_geral.md)
+- [🚀 Deploy em VMs](deployment_vms.md)
+- [☸️ Terraform Azure AKS](../terraform/azure/)
+- [☸️ Terraform GCP GKE](../terraform/gcp/)
